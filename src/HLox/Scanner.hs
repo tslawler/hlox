@@ -1,6 +1,6 @@
-module HLox.Scanner
-    ( lex
-    ) where
+module HLox.Scanner (
+    lex
+) where
 
 import Prelude hiding (lex)
 import Data.Monoid
