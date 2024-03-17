@@ -8,7 +8,7 @@ import System.Exit
 import System.IO
 import System.IO.Error (isEOFError)
 
-import HLox.Scanner as Scanner
+import HLox.Control.Scanner as Scanner
 import HLox (HLox(), runHLox, hadError, clearError)
 
 run :: String -> HLox ()

@@ -1,4 +1,4 @@
-module HLox.Scanner (
+module HLox.Control.Scanner (
     lex
 ) where
 
@@ -8,7 +8,7 @@ import qualified Data.List as L
 import Control.Monad
 import Control.Monad.RWS
 
-import HLox.Token
+import HLox.Data.Token
 import HLox (HLox(), reportError)
 
 data ScannerState = S {
@@ -155,14 +155,14 @@ stringLiteral = do
     case c of
         Nothing -> scanError $ "Unterminated string"
         -- Guaranteed to be '"'
-        (Just _) -> advance >> addToken' (Literal . L_Str . tail . init)
+        (Just _) -> advance >> addToken' (LitToken . LT_Str . tail . init)
 
 numberLiteral :: Scanner ()
 numberLiteral = do
     eatWhile isDigit
     (c,d) <- peek2
     when (c == Just '.' && maybe False isDigit d) (advance >> eatWhile isDigit)
-    addToken' (Literal . L_Num . read)
+    addToken' (LitToken . LT_Num . read)
 
 identifier :: Scanner ()
 identifier = do

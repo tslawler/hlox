@@ -1,5 +1,5 @@
-module HLox.Token (
-    Token(Token), TokenType(..), Literal(..), Brace(..), OpToken(..), Reserved(..), reserved
+module HLox.Data.Token (
+    Token(Token), TokenType(..), LitToken(..), Brace(..), OpToken(..), Reserved(..), reserved
 ) where
 
 data Token = Token {
@@ -11,7 +11,7 @@ data Token = Token {
 
 data TokenType
     = Reserved Reserved
-    | Literal Literal
+    | LitToken LitToken
     | Identifier String
     | Operator OpToken
     | Open Brace
@@ -22,9 +22,9 @@ data TokenType
     | EOF
     deriving (Eq, Ord, Show)
 
-data Literal
-    = L_Str String
-    | L_Num Double
+data LitToken
+    = LT_Str String
+    | LT_Num Double
     deriving (Eq, Ord, Show)
 
 data Brace = Paren | Bracket deriving (Eq, Ord, Show, Bounded)
