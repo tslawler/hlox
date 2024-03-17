@@ -41,7 +41,7 @@ match typs = do
     if (_type tok `elem` typs) then (advance >> return (Just tok)) else return Nothing
 
 advance :: Parser ()
-advance = modify' tail
+advance = modify tail
 
 takeToken :: Parser Token
 takeToken = do
