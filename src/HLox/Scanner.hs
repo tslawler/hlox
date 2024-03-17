@@ -5,6 +5,7 @@ module HLox.Scanner (
 import Prelude hiding (lex)
 import Data.Monoid
 import qualified Data.List as L
+import Control.Monad
 import Control.Monad.RWS
 
 import HLox.Token
@@ -142,7 +143,7 @@ eatWhile predicate = go
     where
     go = do
         c <- peek
-        if maybe False predicate c then advance >> go else return ()
+        when (maybe False predicate c) (advance >> go)
 
 comment :: Scanner ()
 comment = eatWhile (/= '\n')
@@ -160,7 +161,7 @@ numberLiteral :: Scanner ()
 numberLiteral = do
     eatWhile isDigit
     (c,d) <- peek2
-    if c == Just '.' && maybe False isDigit d then (advance >> eatWhile isDigit) else return ()
+    when (c == Just '.' && maybe False isDigit d) (advance >> eatWhile isDigit)
     addToken' (Literal . L_Num . read)
 
 identifier :: Scanner ()

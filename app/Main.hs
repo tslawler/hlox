@@ -1,5 +1,6 @@
 module Main (main) where
 
+import Control.Monad
 import Control.Monad.Catch
 import Control.Monad.Trans
 import System.Environment
@@ -14,8 +15,7 @@ run :: String -> HLox ()
 run code = do
     tokens <- Scanner.lex code
     b <- hadError
-    if b then return () else do
-        lift $ print tokens
+    unless b (lift $ print tokens)
 
 runRepl :: IO ()
 runRepl = do
@@ -30,11 +30,16 @@ repl = do
     input <- catchIOError (lift getLine) (\e -> if isEOFError e then lift $ exitSuccess else lift (putStrLn "Error reading input") >> repl)
     run input
     b <- hadError
-    if b then clearError else return ()
+    when b clearError
     repl
 
 runFile :: FilePath -> IO ()
-runFile file = readFile file >>= runHLox . run
+runFile file = do
+    code <- readFile file
+    runHLox $ do
+        run code
+        b <- hadError
+        when b (lift $ exitWith (ExitFailure 65))
 
 main :: IO ()
 main = getArgs >>= parseArgs
