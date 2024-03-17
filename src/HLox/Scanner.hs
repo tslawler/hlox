@@ -8,6 +8,7 @@ import qualified Data.List as L
 import Control.Monad.RWS
 
 import HLox.Token
+import HLox (HLox(), reportError)
 
 data ScannerState = S {
     _data :: [Char], -- ^ Source data yet to be processed.
@@ -20,13 +21,13 @@ data ScannerState = S {
 initState :: [Char] -> ScannerState
 initState cs = S cs [] 1 1 1
 
-type Scanner = RWS () (Endo [Token]) ScannerState
+type Scanner = RWST () (Endo [Token]) ScannerState HLox
 
 -- | The main entry point to the scanner. Given a string, produces a list of tokens.
-lex :: [Char] -> [Token]
-lex [] = [Token EOF "" 1 1]
-lex source = appEndo outputOfLexer [] 
-    where outputOfLexer = snd $ evalRWS lexer () (initState source)
+lex :: [Char] -> HLox [Token]
+lex source = do
+    (_, Endo tokens) <- evalRWST lexer () (initState source)
+    return $ tokens []
 
 -- | The main loop. Repeatedly scans tokens.
 lexer :: Scanner ()
@@ -70,7 +71,13 @@ scanToken = do
         '"' -> stringLiteral
         x | isDigit x -> numberLiteral
         x | isAlpha x -> identifier
-        _ -> error $ "Unexpected character: '" ++ [c] ++ "'"
+        _ -> scanError $ "Unexpected character: " ++ [c]
+
+-- | Emits a scanner error.
+scanError :: String -> Scanner ()
+scanError msg = do
+    line <- gets _line
+    lift $ reportError line msg
 
 -- | Returns true if we've hit end of file.
 isAtEnd :: ScannerState -> Bool
@@ -145,7 +152,7 @@ stringLiteral = do
     eatWhile (/= '"')
     c <- peek
     case c of
-        Nothing -> error $ "Unterminated string"
+        Nothing -> scanError $ "Unterminated string"
         -- Guaranteed to be '"'
         (Just _) -> advance >> addToken' (Literal . L_Str . tail . init)
 

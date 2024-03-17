@@ -60,7 +60,9 @@ common warnings
 
 library
   exposed-modules:
-      HLox.Scanner, HLox.Token
+      HLox
+    , HLox.Scanner
+    , HLox.Token
   autogen-modules:
       Paths_hlox
   other-modules:
@@ -84,6 +86,8 @@ executable hlox
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.7 && <5
+    , mtl >=2.2 && <2.3
+    , exceptions >=0.10 && <0.11
     , hlox
   default-language: Haskell2010
 
