@@ -9,13 +9,18 @@ import System.IO
 import System.IO.Error (isEOFError)
 
 import HLox.Control.Scanner as Scanner
+import HLox.Control.Parser as Parser
 import HLox (HLox(), runHLox, hadError, clearError)
 
 run :: String -> HLox ()
 run code = do
     tokens <- Scanner.lex code
     b <- hadError
-    unless b (lift $ print tokens)
+    unless b $ do
+        expr <- Parser.parseExpr tokens
+        b <- hadError
+        unless b $ do
+            lift $ print expr
 
 runRepl :: IO ()
 runRepl = do

@@ -1,5 +1,5 @@
 module HLox.Data.Expr (
-    Expr(..), Literal(..)
+    Expr(..), Literal(..), fromLitToken
 ) where
 
 import HLox.Data.Token
@@ -18,3 +18,7 @@ data Literal
     | LitFalse
     | LitNil
     deriving (Eq, Ord, Show)
+
+fromLitToken :: LitToken -> Literal
+fromLitToken (LT_Num n) = LitNum n
+fromLitToken (LT_Str s) = LitStr s

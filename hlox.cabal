@@ -62,6 +62,7 @@ library
   exposed-modules:
       HLox
     , HLox.Control.Scanner
+    , HLox.Control.Parser
     , HLox.Data.Expr
     , HLox.Data.Token
   autogen-modules:

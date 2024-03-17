@@ -8,7 +8,8 @@ import qualified Data.List as L
 import Control.Monad
 import Control.Monad.RWS
 
-import HLox.Data.Token
+-- TODO: Find a better way of doing this. (Probably using lens.)
+import HLox.Data.Token hiding (_line, _col)
 import HLox (HLox(), reportError)
 
 data ScannerState = S {

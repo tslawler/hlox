@@ -1,5 +1,5 @@
 module HLox.Data.Token (
-    Token(Token), TokenType(..), LitToken(..), Brace(..), OpToken(..), Reserved(..), reserved
+    Token(..), TokenType(..), LitToken(..), Brace(..), OpToken(..), Reserved(..), reserved
 ) where
 
 data Token = Token {
