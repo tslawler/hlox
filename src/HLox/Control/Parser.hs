@@ -71,10 +71,9 @@ consume typ msg = do
     tok <- takeToken
     unless (_type tok == typ) $ parseError tok msg
 
--- | Parses a sequence of `next` separated by `matchingTypes`
--- | 
-binaryStream :: [TokenType] -> Parser Expr -> Parser Expr
-binaryStream matchingTypes next = go
+-- | Parses a sequence of `next` separated by `matchingTypes`.
+infixStream :: [TokenType] -> Parser Expr -> Parser Expr
+infixStream matchingTypes next = go
     where
     go = do
         lhs <- next
@@ -83,35 +82,46 @@ binaryStream matchingTypes next = go
             Nothing -> return lhs
             (Just tok) -> Binary lhs tok <$> go
 
+-- | Parses a `next` preceded by any number of `matchingTypes`.
+prefixStream :: [TokenType] -> Parser Expr -> Parser Expr
+prefixStream matchingTypes next = go
+    where
+    go = do
+        mbTok <- match matchingTypes
+        case mbTok of
+            Nothing -> next
+            (Just tok) -> Unary tok <$> go
+
+-- | List of infix operators, ordered low->high precedence.
+-- | Operators of the same precedence are grouped.
+infixOperators :: [[TokenType]]
+infixOperators = map (map Operator) [
+    -- Equality
+    [O_EqualEqual, O_BangEqual],
+    -- Comparison
+    [O_Less, O_LessEqual, O_Greater, O_GreaterEqual],
+    -- Addition
+    [O_Plus, O_Minus],
+    -- Multiplication
+    [O_Slash, O_Star]]
+
+-- | List of prefix operators.
+-- | All prefix operators have the same precedence, so no need to sort them.
+prefixOperators :: [TokenType]
+prefixOperators = map Operator [O_Bang, O_Minus]
+
 expr :: Parser Expr
-expr = equality
-
-equality :: Parser Expr
-equality = binaryStream [Operator O_EqualEqual, Operator O_BangEqual] comparison
-comparison :: Parser Expr
-comparison = binaryStream [Operator O_Less, Operator O_LessEqual, Operator O_Greater, Operator O_GreaterEqual] term
-term :: Parser Expr
-term = binaryStream [Operator O_Plus, Operator O_Minus] factor
-factor :: Parser Expr
-factor = binaryStream [Operator O_Slash, Operator O_Star] unary
-
-unary :: Parser Expr
-unary = do
-    mbTok <- match [Operator O_Bang, Operator O_Minus]
-    case mbTok of
-        Nothing -> primary
-        (Just tok) -> Unary tok <$> unary
-
-primary :: Parser Expr
-primary = do
-    tok <- takeToken
-    case _type tok of
-        (LitToken lt) -> return.Literal $ fromLitToken lt
-        (Reserved R_True) -> return.Literal $ LitTrue
-        (Reserved R_False) -> return.Literal $ LitFalse
-        (Reserved R_Nil) -> return.Literal $ LitNil
-        (Open Paren) -> do
-            e <- expr
-            consume (Close Paren) "Expected ')' after expression."
-            return $ Grouping e
-        _ -> parseError tok "Expected an expression."
+expr = foldr infixStream (prefixStream prefixOperators primary) infixOperators
+    where
+    primary = do
+        tok <- takeToken
+        case _type tok of
+            (LitToken lt) -> return.Literal $ fromLitToken lt
+            (Reserved R_True) -> return.Literal $ LitTrue
+            (Reserved R_False) -> return.Literal $ LitFalse
+            (Reserved R_Nil) -> return.Literal $ LitNil
+            (Open Paren) -> do
+                e <- expr
+                consume (Close Paren) "Expected ')' after expression."
+                return $ Grouping e
+            _ -> parseError tok "Expected an expression."
