@@ -3,23 +3,40 @@ module HLox.Control.Parser (
 ) where
 
 import Control.Monad
+import Control.Monad.Except
 import Control.Monad.State
 
 import HLox (HLox(), reportError')
 import HLox.Data.Token
 import HLox.Data.Expr
 
-type Parser = StateT [Token] HLox
+data ParseError = ParseError Token deriving (Eq)
+
+type Parser = ExceptT ParseError (StateT [Token] HLox)
 
 parseExpr :: [Token] -> HLox Expr
-parseExpr = runParser expr
+parseExpr tokens = either (const (Literal LitNil)) id <$> runParser expr tokens
 
-runParser :: Parser a -> [Token] -> HLox a
-runParser = evalStateT
+runParser :: Parser a -> [Token] -> HLox (Either ParseError a)
+runParser = evalStateT . runExceptT
 
--- TODO: Panic properly.
-panic :: Parser a
-panic = lift.lift $ ioError (userError "Panic!")
+-- | List of keywords which begin a new statement.
+beginsStatement :: [Reserved]
+beginsStatement = [R_Class, R_For, R_Fun, R_If, R_Print, R_Return, R_While, R_Var]
+
+-- | Consume tokens until the start of a new statement or EOF.
+synchronize :: Parser ()
+synchronize = do
+    tok <- peekToken
+    case _type tok of
+        Semicolon -> advance >> return ()
+        (Reserved x) | x `elem` beginsStatement -> return ()
+        EOF -> return ()
+        _ -> advance >> synchronize
+
+
+panic :: Token -> Parser a
+panic tok = throwError (ParseError tok)
 
 parseError :: Token -> String -> Parser a
 parseError tok msg = 
@@ -27,8 +44,8 @@ parseError tok msg =
             EOF -> " at end"
             _ -> " at '" ++ _lexeme tok ++ "' (column " ++ show (_col tok) ++ ")"
     in do
-        lift $ reportError' (_line tok) loc msg
-        panic
+        lift.lift $ reportError' (_line tok) loc msg
+        panic tok
 
 peekToken :: Parser Token
 peekToken = gets head
