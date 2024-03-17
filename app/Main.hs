@@ -10,6 +10,7 @@ import System.IO.Error (isEOFError)
 
 import HLox.Control.Scanner as Scanner
 import HLox.Control.Parser as Parser
+import HLox.Control.Pretty as Pretty
 import HLox (HLox(), runHLox, hadError, clearError)
 
 run :: String -> HLox ()
@@ -20,7 +21,7 @@ run code = do
         expr <- Parser.parseExpr tokens
         b <- hadError
         unless b $ do
-            lift $ print expr
+            lift $ Pretty.print expr
 
 runRepl :: IO ()
 runRepl = do

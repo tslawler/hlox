@@ -61,8 +61,9 @@ common warnings
 library
   exposed-modules:
       HLox
-    , HLox.Control.Scanner
     , HLox.Control.Parser
+    , HLox.Control.Pretty
+    , HLox.Control.Scanner
     , HLox.Data.Expr
     , HLox.Data.Token
   autogen-modules:
