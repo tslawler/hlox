@@ -71,16 +71,15 @@ consume typ msg = do
     tok <- takeToken
     unless (_type tok == typ) $ parseError tok msg
 
--- | Parses a sequence of `next` separated by `matchingTypes`.
-infixStream :: [TokenType] -> Parser Expr -> Parser Expr
-infixStream matchingTypes next = go
+-- | Parses a sequence of `next` separated by `matchingTypes`, left-associative.
+infixLStream :: [TokenType] -> Parser Expr -> Parser Expr
+infixLStream matchingTypes next = next >>= go
     where
-    go = do
-        lhs <- next
+    go acc = do
         mbTok <- match matchingTypes
         case mbTok of
-            Nothing -> return lhs
-            (Just tok) -> Binary lhs tok <$> go
+            Nothing -> return acc
+            (Just tok) -> next >>= go . Binary acc tok
 
 -- | Parses a `next` preceded by any number of `matchingTypes`.
 prefixStream :: [TokenType] -> Parser Expr -> Parser Expr
@@ -111,7 +110,7 @@ prefixOperators :: [TokenType]
 prefixOperators = map Operator [O_Bang, O_Minus]
 
 expr :: Parser Expr
-expr = foldr infixStream (prefixStream prefixOperators primary) infixOperators
+expr = foldr infixLStream (prefixStream prefixOperators primary) infixOperators
     where
     primary = do
         tok <- takeToken
