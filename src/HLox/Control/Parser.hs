@@ -6,7 +6,7 @@ import Control.Monad
 import Control.Monad.Except
 import Control.Monad.State
 
-import HLox.Control.Error
+import HLox.Control.Base
 import HLox.Data.Token
 import HLox.Data.Expr
 import Data.Either (fromRight)
@@ -42,7 +42,7 @@ panic tok = throwError (ParseError tok)
 
 parseError' :: Token -> String -> Parser a
 parseError' tok msg = do
-    lift $ report (parseError tok msg)
+    lift.lift $ report (parseError tok msg)
     panic tok
 
 peekToken :: Parser Token
@@ -67,7 +67,7 @@ takeToken = do
 consume :: TokenType -> String -> Parser ()
 consume typ msg = do
     tok <- takeToken
-    unless (_type tok == typ) $ parseError tok msg
+    unless (_type tok == typ) $ parseError' tok msg
 
 -- | Parses a sequence of `next` separated by `matchingTypes`, left-associative.
 infixLStream :: [TokenType] -> Parser Expr -> Parser Expr
@@ -121,4 +121,4 @@ expr = foldr infixLStream (prefixStream prefixOperators primary) infixOperators
                 e <- expr
                 consume (Close Paren) "Expected ')' after expression."
                 return $ Grouping e
-            _ -> parseError tok "Expected an expression."
+            _ -> parseError' tok "Expected an expression."

@@ -61,12 +61,14 @@ common warnings
 library
   exposed-modules:
       HLox
-    , HLox.Control.Error
+    , HLox.Control.Base
+    , HLox.Control.Interpreter
     , HLox.Control.Parser
     , HLox.Control.Pretty
     , HLox.Control.Scanner
     , HLox.Data.Expr
     , HLox.Data.Token
+    , HLox.Data.Value
   autogen-modules:
       Paths_hlox
   other-modules:
