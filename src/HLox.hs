@@ -3,21 +3,22 @@ module HLox (
 ) where
 
 import qualified Control.Monad.Except as E
+import Control.Monad.Trans (lift)
 import System.IO
+import System.IO.Error
 import System.Exit
 
-import HLox.Control.Base
-import HLox.Control.Pretty as Pretty
-import HLox.Control.Scanner as Scanner
-import HLox.Control.Parser as Parser
-import Control.Monad.Trans (lift)
-import System.IO.Error
+import HLox.Control.Base (HLox, runHLox)
+import qualified HLox.Control.Scanner as Scanner
+import qualified HLox.Control.Parser as Parser
+import qualified HLox.Control.Interpreter as Interpreter
 
 run :: String -> HLox ()
 run code = do
     tokens <- Scanner.lex code
     expr <- Parser.parseExpr tokens
-    lift $ Pretty.print expr
+    value <- Interpreter.interpret expr
+    lift $ print value
 
 runRepl :: IO ()
 runRepl = do

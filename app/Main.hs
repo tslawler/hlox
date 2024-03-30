@@ -1,8 +1,6 @@
 module Main (main) where
 
 import System.Environment
-import System.Exit
-import System.IO
 
 import HLox (runRepl, runFile)
 

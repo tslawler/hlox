@@ -1,5 +1,5 @@
 module HLox.Data.Value (
-    Value(..)
+    Value(..), typeMatch
 ) where
 
 data Value
@@ -17,3 +17,10 @@ instance (Show Value) where
     show (VBool True) = "true"
     show (VBool False) = "false"
     show VNil = "nil"
+
+typeMatch :: Value -> Value -> Bool
+typeMatch (VStr _) (VStr _) = True
+typeMatch (VNum _) (VNum _) = True
+typeMatch (VBool _) (VBool _) = True
+typeMatch VNil VNil = True
+typeMatch _ _ = False

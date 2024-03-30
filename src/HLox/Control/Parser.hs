@@ -1,3 +1,5 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use void" #-}
 module HLox.Control.Parser (
     parseExpr
 ) where
@@ -6,7 +8,8 @@ import Control.Monad
 import Control.Monad.Except
 import Control.Monad.State
 
-import HLox.Control.Base
+import HLox.Control.Base (HLox, report)
+import qualified HLox.Control.Base as Base
 import HLox.Data.Token
 import HLox.Data.Expr
 import Data.Either (fromRight)
@@ -40,9 +43,9 @@ synchronize = do
 panic :: Token -> Parser a
 panic tok = throwError (ParseError tok)
 
-parseError' :: Token -> String -> Parser a
-parseError' tok msg = do
-    lift.lift $ report (parseError tok msg)
+parseError :: Token -> String -> Parser a
+parseError tok msg = do
+    lift.lift $ report (Base.parseError tok msg)
     panic tok
 
 peekToken :: Parser Token
@@ -53,7 +56,7 @@ peekToken = gets head
 match :: [TokenType] -> Parser (Maybe Token)
 match typs = do
     tok <- peekToken
-    if (_type tok `elem` typs) then (advance >> return (Just tok)) else return Nothing
+    if _type tok `elem` typs then advance >> return (Just tok) else return Nothing
 
 advance :: Parser ()
 advance = modify tail
@@ -67,7 +70,7 @@ takeToken = do
 consume :: TokenType -> String -> Parser ()
 consume typ msg = do
     tok <- takeToken
-    unless (_type tok == typ) $ parseError' tok msg
+    unless (_type tok == typ) $ parseError tok msg
 
 -- | Parses a sequence of `next` separated by `matchingTypes`, left-associative.
 infixLStream :: [TokenType] -> Parser Expr -> Parser Expr
@@ -121,4 +124,4 @@ expr = foldr infixLStream (prefixStream prefixOperators primary) infixOperators
                 e <- expr
                 consume (Close Paren) "Expected ')' after expression."
                 return $ Grouping e
-            _ -> parseError' tok "Expected an expression."
+            _ -> parseError tok "Expected an expression."

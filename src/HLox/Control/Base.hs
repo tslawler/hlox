@@ -1,5 +1,5 @@
 module HLox.Control.Base (
-    Report(), scanError, parseError, runtimeError,
+    Report(), scanError, parseError, runtimeError, unimplemented,
     HLox(), report, throw, runHLox
 ) where
 
@@ -36,9 +36,11 @@ parseError (Token typ lexeme line col) = ErrorReport (Just line) (Just col) Pars
             EOF -> " at end"
             _ -> " at '" ++ lexeme ++ "'"
 
-runtimeError :: String -> Report
-runtimeError = ErrorReport Nothing Nothing Runtime ""
+runtimeError :: Token -> String -> Report
+runtimeError (Token _ _ line col) = ErrorReport (Just line) (Just col) Runtime ""
 
+unimplemented :: String -> Report
+unimplemented = ErrorReport Nothing Nothing Runtime ""
 
 type HLox = ExceptT Report IO
 

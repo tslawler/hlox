@@ -4,13 +4,15 @@ module HLox.Control.Scanner (
 
 import Prelude hiding (lex)
 import Data.Monoid
+import Data.Char (isAsciiLower, isAsciiUpper, isDigit)
 import qualified Data.List as L
 import Control.Monad
 import Control.Monad.RWS
 
+import HLox.Control.Base (HLox, report)
+import qualified HLox.Control.Base as Base
 -- TODO: Find a better way of doing this. (Probably using lens.)
 import HLox.Data.Token hiding (_line, _col)
-import HLox.Control.Base
 
 data ScannerState = S {
     _data :: [Char], -- ^ Source data yet to be processed.
@@ -73,13 +75,13 @@ scanToken = do
         '"' -> stringLiteral
         x | isDigit x -> numberLiteral
         x | isAlpha x -> identifier
-        _ -> scanError' $ "Unexpected character: " ++ [c]
+        _ -> scanError $ "Unexpected character: " ++ [c]
 
 -- | Emits a scanner error.
-scanError' :: String -> Scanner ()
-scanError' msg = do
+scanError :: String -> Scanner ()
+scanError msg = do
     s <- get
-    lift $ report (scanError (_line s) (_col s) msg)
+    lift $ report (Base.scanError (_line s) (_col s) msg)
 
 -- | Returns true if we've hit end of file.
 isAtEnd :: ScannerState -> Bool
@@ -89,18 +91,15 @@ isSpace :: Char -> Bool
 isSpace c = c `elem` " \r\t"
 
 isAlpha :: Char -> Bool
-isAlpha c = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
+isAlpha c = isAsciiLower c || isAsciiUpper c || c == '_'
 isAlphanumeric :: Char -> Bool
 isAlphanumeric c = isAlpha c || isDigit c
-
-isDigit :: Char -> Bool
-isDigit c = c >= '0' && c <= '9'
 
 -- | Consumes and returns one character. Assumes that we are not at the end.
 advance :: Scanner Char
 advance = do
     c <- gets (head . _data)
-    modify (\s -> s{_data = tail (_data s), _acc = (c:_acc s), _col = _col s + 1})
+    modify (\s -> s{_data = tail (_data s), _acc = c:_acc s, _col = _col s + 1})
     return c
 
 -- | Returns one character past the current.
@@ -123,7 +122,7 @@ peek2 = do
 -- | If the next character matches the given one, advance and return `yes`, otherwise return `no`.
 match :: Char -> a -> a -> Scanner a
 match c yes no = peek >>= maybe (return no) (\c' ->
-    if (c == c') then (advance >> return yes) else return no)
+    if c == c' then advance >> return yes else return no)
 
 -- | Adds a token of the given type to the scanner.
 addToken :: TokenType -> Scanner ()
@@ -154,7 +153,7 @@ stringLiteral = do
     eatWhile (/= '"')
     c <- peek
     case c of
-        Nothing -> scanError' "Unterminated string"
+        Nothing -> scanError "Unterminated string"
         -- Guaranteed to be '"'
         (Just _) -> advance >> addToken' (LitToken . LT_Str . tail . init)
 
