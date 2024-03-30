@@ -10,7 +10,7 @@ import Control.Monad.RWS
 
 -- TODO: Find a better way of doing this. (Probably using lens.)
 import HLox.Data.Token hiding (_line, _col)
-import HLox (HLox(), reportError)
+import HLox.Control.Base
 
 data ScannerState = S {
     _data :: [Char], -- ^ Source data yet to be processed.
@@ -73,13 +73,13 @@ scanToken = do
         '"' -> stringLiteral
         x | isDigit x -> numberLiteral
         x | isAlpha x -> identifier
-        _ -> scanError $ "Unexpected character: " ++ [c]
+        _ -> scanError' $ "Unexpected character: " ++ [c]
 
 -- | Emits a scanner error.
-scanError :: String -> Scanner ()
-scanError msg = do
-    line <- gets _line
-    lift $ reportError line msg
+scanError' :: String -> Scanner ()
+scanError' msg = do
+    s <- get
+    lift $ report (scanError (_line s) (_col s) msg)
 
 -- | Returns true if we've hit end of file.
 isAtEnd :: ScannerState -> Bool
@@ -154,7 +154,7 @@ stringLiteral = do
     eatWhile (/= '"')
     c <- peek
     case c of
-        Nothing -> scanError $ "Unterminated string"
+        Nothing -> scanError' "Unterminated string"
         -- Guaranteed to be '"'
         (Just _) -> advance >> addToken' (LitToken . LT_Str . tail . init)
 

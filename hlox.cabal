@@ -61,6 +61,7 @@ common warnings
 library
   exposed-modules:
       HLox
+    , HLox.Control.Error
     , HLox.Control.Parser
     , HLox.Control.Pretty
     , HLox.Control.Scanner

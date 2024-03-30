@@ -6,16 +6,18 @@ import Control.Monad
 import Control.Monad.Except
 import Control.Monad.State
 
-import HLox (HLox(), reportError')
+import HLox.Control.Error
 import HLox.Data.Token
 import HLox.Data.Expr
+import Data.Either (fromRight)
 
 data ParseError = ParseError Token deriving (Eq)
 
 type Parser = ExceptT ParseError (StateT [Token] HLox)
 
 parseExpr :: [Token] -> HLox Expr
-parseExpr tokens = either (const (Literal LitNil)) id <$> runParser expr tokens
+parseExpr tokens = fromRight (Literal LitNil) <$> runParser expr tokens
+
 
 runParser :: Parser a -> [Token] -> HLox (Either ParseError a)
 runParser = evalStateT . runExceptT
@@ -38,14 +40,10 @@ synchronize = do
 panic :: Token -> Parser a
 panic tok = throwError (ParseError tok)
 
-parseError :: Token -> String -> Parser a
-parseError tok msg = 
-    let loc = case _type tok of
-            EOF -> " at end"
-            _ -> " at '" ++ _lexeme tok ++ "' (column " ++ show (_col tok) ++ ")"
-    in do
-        lift.lift $ reportError' (_line tok) loc msg
-        panic tok
+parseError' :: Token -> String -> Parser a
+parseError' tok msg = do
+    lift $ report (parseError tok msg)
+    panic tok
 
 peekToken :: Parser Token
 peekToken = gets head
