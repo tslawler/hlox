@@ -17,6 +17,7 @@ prettify (Literal (LitNum d)) =
     in if k == 0.0 then show (n :: Integer) else show d
 prettify (Grouping body) = parens ["group", prettify body]
 prettify (Unary tok body) = parens [_lexeme tok, prettify body]
+prettify (Variable tok) = _lexeme tok
 prettify (Binary lhs tok rhs) = parens [_lexeme tok, prettify lhs, prettify rhs]
 
 print :: Expr -> IO ()

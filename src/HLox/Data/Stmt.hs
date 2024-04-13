@@ -6,6 +6,7 @@ import HLox.Data.Expr
 import HLox.Data.Token
 
 data Stmt
-    = Print Expr
-    | Expr Expr
+    = Print Expr -- ^ print expr;
+    | Expr Expr -- ^ expr;
+    | Var Token (Maybe Expr) -- ^ var token [= expr];
     deriving (Eq, Ord, Show)

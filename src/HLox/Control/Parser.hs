@@ -91,10 +91,13 @@ takeToken = do
     advance
     return tok
 
-consume :: TokenType -> String -> Parser ()
-consume typ msg = do
+consumeP :: (TokenType -> Bool) -> String -> Parser ()
+consumeP predicate msg = do
     tok <- takeToken
-    unless (_type tok == typ) $ parseError tok msg
+    unless (predicate (_type tok)) $ parseError tok msg
+
+consume :: TokenType -> String -> Parser ()
+consume typ = consumeP (== typ)
 
 -- | Parses a sequence of `next` separated by `matchingTypes`, left-associative.
 infixLStream :: [TokenType] -> Parser Expr -> Parser Expr
@@ -140,6 +143,7 @@ expr = foldr infixLStream (prefixStream prefixOperators primary) infixOperators
     primary = do
         tok <- takeToken
         case _type tok of
+            (Identifier _) -> return.Variable $ tok
             (LitToken lt) -> return.Literal $ fromLitToken lt
             (Reserved R_True) -> return.Literal $ LitTrue
             (Reserved R_False) -> return.Literal $ LitFalse
@@ -157,16 +161,29 @@ stmt = do
         (Reserved R_Print) -> do
             advance
             e <- expr
-            consume Semicolon "Expect ';' after value."
+            consume Semicolon "Expected ';' after value."
             return $ Print e
         _ -> do
             e <- expr
-            consume Semicolon "Expect ';' after expression."
+            consume Semicolon "Expected ';' after expression."
             return $ Expr e
+
+decl' :: Parser Stmt
+decl' = do
+    start <- peekToken
+    case _type start of
+        (Reserved R_Var) -> do
+            advance
+            tok <- takeToken
+            unless (isIdentifier (_type tok)) $ parseError tok "Expected identifier after 'var'."
+            mexpr <- match [Operator O_Equal] >>= maybe (return Nothing) (\_ -> Just <$> expr)
+            consume Semicolon "Expected ';' after variable declaration."
+            return $ Var tok mexpr
+        _ -> stmt
 
 decl :: Parser (Maybe Stmt)
 decl = do
-    v <- tolerate stmt
+    v <- tolerate decl'
     when (isNothing v) synchronize
     return v
 

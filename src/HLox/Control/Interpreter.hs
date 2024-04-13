@@ -3,6 +3,7 @@ module HLox.Control.Interpreter (
     Runtime, withRuntime, eval, exec, runProgram
 ) where
 
+import Prelude hiding (lookup)
 import qualified HLox.Control.Base as Base
 import HLox.Data.Expr
 import HLox.Data.Stmt
@@ -10,15 +11,16 @@ import HLox.Data.Value
 import HLox.Data.Token
 import Control.Monad.RWS
 import Data.Foldable
+import qualified Data.Map as M
 
 type Env = ()
-type State = ()
+type State = M.Map String Value
 type Runtime = RWST Env () State Base.HLox
 
 initEnv :: Env
 initEnv = ()
 initState :: State
-initState = ()
+initState = M.empty
 
 withRuntime :: Runtime a -> Base.HLox a
 withRuntime rt = fst <$> evalRWST rt initEnv initState
@@ -72,9 +74,17 @@ plus :: Value -> Value -> Value
 plus (VNum a) (VNum b) = VNum (a + b)
 plus (VStr a) (VStr b) = VStr (a ++ b)
 
+define :: String -> Value -> Runtime ()
+define name val = modify (M.insert name val)
+
+lookup :: Token -> Runtime Value
+lookup tok = 
+    gets (M.lookup (_lexeme tok)) >>= maybe (runtimeError tok $ "Undefined variable '" ++ _lexeme tok ++ "'.") return
+
 
 eval :: Expr -> Runtime Value
 eval (Literal l) = return (fromLiteral l)
+eval (Variable tok) = lookup tok
 eval (Grouping e) = eval e
 eval (Unary tok e) 
     | _type tok == Operator O_Bang = do {
@@ -122,6 +132,10 @@ exec (Print e) = do
     v <- eval e
     lift.lift $ print v
 exec (Expr e) = void (eval e)
+exec (Var var Nothing) = define (_lexeme var) VNil
+exec (Var var (Just e)) = do
+    val <- eval e
+    define (_lexeme var) val
 
 runProgram :: [Stmt] -> Runtime ()
 runProgram = traverse_ exec

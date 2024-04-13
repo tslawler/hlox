@@ -9,6 +9,7 @@ data Expr
     | Unary Token Expr
     | Grouping Expr
     | Literal Literal
+    | Variable Token
     deriving (Eq, Ord, Show)
 
 data Literal

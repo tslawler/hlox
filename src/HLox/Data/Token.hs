@@ -1,7 +1,7 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Use camelCase" #-}
 module HLox.Data.Token (
-    Token(..), TokenType(..), LitToken(..), Brace(..), OpToken(..), Reserved(..), reserved
+    Token(..), TokenType(..), LitToken(..), Brace(..), OpToken(..), Reserved(..), reserved, isIdentifier
 ) where
 
 data Token = Token {
@@ -23,6 +23,10 @@ data TokenType
     | Semicolon
     | EOF
     deriving (Eq, Ord, Show)
+
+isIdentifier :: TokenType -> Bool
+isIdentifier (Identifier _) = True
+isIdentifier _ = False
 
 data LitToken
     = LT_Str String
