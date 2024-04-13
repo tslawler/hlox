@@ -3,7 +3,6 @@ module HLox.Control.Pretty (
 ) where
 
 import Prelude hiding (print)
-import Data.List (intercalate)
 
 import HLox.Data.Expr
 import HLox.Data.Token (_lexeme)
@@ -24,4 +23,4 @@ print :: Expr -> IO ()
 print expr = putStrLn (prettify expr)
 
 parens :: [String] -> String
-parens strs = "(" ++ intercalate " " strs ++ ")"
+parens strs = "(" ++ unwords strs ++ ")"

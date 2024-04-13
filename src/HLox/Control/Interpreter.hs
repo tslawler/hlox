@@ -1,13 +1,33 @@
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 module HLox.Control.Interpreter (
-    interpret
+    Runtime, withRuntime, eval, exec, runProgram
 ) where
 
-import HLox.Control.Base
+import qualified HLox.Control.Base as Base
 import HLox.Data.Expr
+import HLox.Data.Stmt
 import HLox.Data.Value
 import HLox.Data.Token
-import Control.Monad (unless)
+import Control.Monad.RWS
+import Data.Foldable
+
+type Env = ()
+type State = ()
+type Runtime = RWST Env () State Base.HLox
+
+initEnv :: Env
+initEnv = ()
+initState :: State
+initState = ()
+
+withRuntime :: Runtime a -> Base.HLox a
+withRuntime rt = fst <$> evalRWST rt initEnv initState
+
+runtimeError :: Token -> String -> Runtime a
+runtimeError tok msg = lift $ Base.throw (Base.runtimeError tok msg)
+
+unimplemented :: String -> Runtime a
+unimplemented msg = lift $ Base.throw (Base.unimplemented msg)
 
 fromLiteral :: Literal -> Value
 fromLiteral (LitNum d) = VNum d
@@ -16,22 +36,22 @@ fromLiteral LitFalse = VBool False
 fromLiteral LitTrue = VBool True
 fromLiteral LitNil = VNil
 
-checkBool :: Value -> Token -> HLox Bool
+checkBool :: Value -> Token -> Runtime Bool
 checkBool (VBool b) _ = return b
-checkBool v tok = throw (runtimeError tok ("Operand must be a Boolean: " ++ show v))
+checkBool v tok = runtimeError tok ("Operand must be a Boolean: " ++ show v)
 
-checkNum :: Value -> Token -> HLox Double
+checkNum :: Value -> Token -> Runtime Double
 checkNum (VNum n) _ = return n
-checkNum v tok = throw (runtimeError tok ("Operand must be a Number: " ++ show v))
+checkNum v tok = runtimeError tok ("Operand must be a Number: " ++ show v)
 
-checkNumOrStr :: Value -> Token -> HLox ()
+checkNumOrStr :: Value -> Token -> Runtime ()
 checkNumOrStr (VNum _) _ = return ()
 checkNumOrStr (VStr _) _ = return ()
-checkNumOrStr v tok = throw (runtimeError tok ("Operand must be a Number or String: " ++ show v))
+checkNumOrStr v tok = runtimeError tok ("Operand must be a Number or String: " ++ show v)
 
-checkTypesMatch :: Value -> Value -> Token -> HLox ()
+checkTypesMatch :: Value -> Value -> Token -> Runtime ()
 checkTypesMatch l r tok = unless (typeMatch l r) $
-    throw (runtimeError tok ("Expected types to match: " ++ show l ++ " and " ++ show r))
+    runtimeError tok ("Expected types to match: " ++ show l ++ " and " ++ show r)
 
 equality :: (Eq a) => TokenType -> a -> a -> Bool
 equality (Operator O_EqualEqual) = (==)
@@ -53,46 +73,55 @@ plus (VNum a) (VNum b) = VNum (a + b)
 plus (VStr a) (VStr b) = VStr (a ++ b)
 
 
-interpret :: Expr -> HLox Value
-interpret (Literal l) = return (fromLiteral l)
-interpret (Grouping expr) = interpret expr
-interpret (Unary tok expr) 
+eval :: Expr -> Runtime Value
+eval (Literal l) = return (fromLiteral l)
+eval (Grouping e) = eval e
+eval (Unary tok e) 
     | _type tok == Operator O_Bang = do {
-        v <- interpret expr;
+        v <- eval e;
         b <- checkBool v tok;
         return $ VBool (not b)
     }
     | _type tok == Operator O_Minus = do {
-        v <- interpret expr;
+        v <- eval e;
         n <- checkNum v tok;
         return $ VNum (negate n)
     }
-    | otherwise = throw . unimplemented $ "sorry, but the operator " ++ _lexeme tok ++ " is not implemented yet :<"
-interpret (Binary lhs tok rhs)
+    | otherwise = error "Unreachable"
+eval (Binary lhs tok rhs)
     | _type tok `elem` (Operator <$> [O_EqualEqual, O_BangEqual]) = do {
-        l <- interpret lhs;
-        r <- interpret rhs;
+        l <- eval lhs;
+        r <- eval rhs;
         return $ VBool (equality (_type tok) l r)
     }
     | _type tok `elem` (Operator <$> [O_Less, O_LessEqual, O_Greater, O_GreaterEqual]) = do {
-        l <- interpret lhs;
-        r <- interpret rhs;
+        l <- eval lhs;
+        r <- eval rhs;
         vl <- checkNum l tok;
         vr <- checkNum r tok;
         return $ VBool (comparison (_type tok) vl vr)
     }
     | _type tok `elem` (Operator <$> [O_Minus, O_Star, O_Slash]) = do {
-        l <- interpret lhs;
-        r <- interpret rhs;
+        l <- eval lhs;
+        r <- eval rhs;
         vl <- checkNum l tok;
         vr <- checkNum r tok;
         return $ VNum (numeric (_type tok) vl vr)
     }
     | _type tok == Operator O_Plus = do {
-        l <- interpret lhs;
+        l <- eval lhs;
         checkNumOrStr l tok;
-        r <- interpret rhs;
+        r <- eval rhs;
         checkTypesMatch l r tok;
         return (plus l r)
     }
-    | otherwise = throw . unimplemented $ "sorry, but the operator " ++ _lexeme tok ++ " is not implemented yet :<"
+    | otherwise = unimplemented $ "sorry, but the operator " ++ _lexeme tok ++ " is not implemented yet :<"
+
+exec :: Stmt -> Runtime ()
+exec (Print e) = do
+    v <- eval e
+    lift.lift $ print v
+exec (Expr e) = void (eval e)
+
+runProgram :: [Stmt] -> Runtime ()
+runProgram = traverse_ exec

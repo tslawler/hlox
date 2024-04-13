@@ -1,29 +1,44 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Use void" #-}
 module HLox.Control.Parser (
-    parseExpr
+    parseExpr, parseProgram
 ) where
 
 import Control.Monad
 import Control.Monad.Except
 import Control.Monad.State
+import Data.Maybe (isNothing)
 
 import HLox.Control.Base (HLox, report)
 import qualified HLox.Control.Base as Base
 import HLox.Data.Token
 import HLox.Data.Expr
+import HLox.Data.Stmt
 import Data.Either (fromRight)
+import Data.Monoid
 
-data ParseError = ParseError Token deriving (Eq)
+type ParseErrors = Dual [Token]
 
-type Parser = ExceptT ParseError (StateT [Token] HLox)
+type ParserState = (ParseErrors, [Token])
+
+type Parser = ExceptT () (StateT ParserState HLox)
+
+tolerate :: Parser a -> Parser (Maybe a)
+tolerate p = catchError (fmap Just p) (\_ -> return Nothing)
+
+parseProgram :: [Token] -> HLox [Stmt]
+parseProgram tokens = fromRight [] <$> runParser program tokens
 
 parseExpr :: [Token] -> HLox Expr
 parseExpr tokens = fromRight (Literal LitNil) <$> runParser expr tokens
 
 
-runParser :: Parser a -> [Token] -> HLox (Either ParseError a)
-runParser = evalStateT . runExceptT
+runParser :: Parser a -> [Token] -> HLox (Either [Token] a)
+runParser p toks = enforce <$> runStateT (runExceptT p) (mempty, toks)
+    where
+        enforce (Left _, _) = Left []
+        enforce (Right a,(Dual [], _)) = Right a
+        enforce (Right _,(Dual errs, _)) = Left (reverse errs)
 
 -- | List of keywords which begin a new statement.
 beginsStatement :: [Reserved]
@@ -41,7 +56,9 @@ synchronize = do
 
 
 panic :: Token -> Parser a
-panic tok = throwError (ParseError tok)
+panic tok = do
+    modify (\(ev, toks) -> (ev <> Dual [tok], toks))
+    throwError ()
 
 parseError :: Token -> String -> Parser a
 parseError tok msg = do
@@ -49,7 +66,7 @@ parseError tok msg = do
     panic tok
 
 peekToken :: Parser Token
-peekToken = gets head
+peekToken = gets (head.snd)
 
 -- | If the next token is one of the given types, consume and return it.
 -- | Otherwise, do nothing and return Nothing.
@@ -58,8 +75,15 @@ match typs = do
     tok <- peekToken
     if _type tok `elem` typs then advance >> return (Just tok) else return Nothing
 
+isAtEnd :: Parser Bool
+isAtEnd = do
+    tok <- peekToken
+    return (_type tok == EOF)
+
 advance :: Parser ()
-advance = modify tail
+advance = do
+    b <- isAtEnd
+    unless b $ modify (fmap tail)
 
 takeToken :: Parser Token
 takeToken = do
@@ -125,3 +149,30 @@ expr = foldr infixLStream (prefixStream prefixOperators primary) infixOperators
                 consume (Close Paren) "Expected ')' after expression."
                 return $ Grouping e
             _ -> parseError tok "Expected an expression."
+
+stmt :: Parser Stmt
+stmt = do
+    tok <- peekToken
+    case _type tok of
+        (Reserved R_Print) -> do
+            advance
+            e <- expr
+            consume Semicolon "Expect ';' after value."
+            return $ Print e
+        _ -> do
+            e <- expr
+            consume Semicolon "Expect ';' after expression."
+            return $ Expr e
+
+decl :: Parser (Maybe Stmt)
+decl = do
+    v <- tolerate stmt
+    when (isNothing v) synchronize
+    return v
+
+program :: Parser [Stmt]
+program = do
+    tok <- peekToken
+    case _type tok of
+        EOF -> return []
+        _ -> (maybe id (:) <$> decl) <*> program

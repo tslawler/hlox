@@ -67,6 +67,7 @@ library
     , HLox.Control.Pretty
     , HLox.Control.Scanner
     , HLox.Data.Expr
+    , HLox.Data.Stmt
     , HLox.Data.Token
     , HLox.Data.Value
   autogen-modules:

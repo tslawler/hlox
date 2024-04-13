@@ -21,7 +21,7 @@ instance Show Report where
     show (ErrorReport line col kind loc msg) = linestr ++ show kind ++ " Error" ++ loc ++ ": " ++ msg
         where 
             linestr = maybe "" (\l ->"[line " ++ show l ++ colstr ++ "] ") line
-            colstr = maybe "" (\c -> " col " ++ show c) col
+            colstr = maybe "" (\c -> ", col " ++ show c) col
 
 data ErrorKind = Scan | Parse | Runtime
     deriving (Eq, Ord, Show)

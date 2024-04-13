@@ -4,38 +4,43 @@ module HLox (
 
 import qualified Control.Monad.Except as E
 import Control.Monad.Trans (lift)
+import Control.Monad (void)
 import System.IO
 import System.IO.Error
 import System.Exit
 
-import HLox.Control.Base (HLox, runHLox)
+import HLox.Control.Base (runHLox)
 import qualified HLox.Control.Scanner as Scanner
 import qualified HLox.Control.Parser as Parser
 import qualified HLox.Control.Interpreter as Interpreter
+import HLox.Control.Interpreter (Runtime, withRuntime)
 
-run :: String -> HLox ()
+run :: String -> Runtime ()
 run code = do
-    tokens <- Scanner.lex code
-    expr <- Parser.parseExpr tokens
-    value <- Interpreter.interpret expr
-    lift $ print value
+    tokens <- lift $ Scanner.lex code
+    prog <- lift $ Parser.parseProgram tokens
+    Interpreter.runProgram prog
 
 runRepl :: IO ()
 runRepl = do
     putStrLn "Welcome to the hlox repl."
     putStrLn "Press Ctrl+D to exit."
-    _ <- runHLox repl
-    return ()
+    void . runHLox $ withRuntime repl
 
-repl :: HLox a
+prompt :: IO String
+prompt = do
+    putStr "hlox> "
+    hFlush stdout
+    catchIOError getLine (\e ->
+        if isEOFError e then exitSuccess else hPrint stderr e >> exitFailure)
+
+repl :: Runtime a
 repl = do
-    lift $ putStr "hlox> " >> hFlush stdout
-    input <- lift $ catchIOError getLine (\e -> if isEOFError e then exitSuccess else hPrint stderr e >> exitFailure)
+    input <- lift.lift $ prompt
     E.catchError (run input) (\_ -> return ())
     repl
 
 runFile :: FilePath -> IO ()
 runFile file = do
     code <- readFile file
-    _ <- runHLox $ E.catchError (run code) (\_ -> lift $ exitWith (ExitFailure 65))
-    return ()
+    void . runHLox $ E.catchError (withRuntime $ run code) (\_ -> lift $ exitWith (ExitFailure 65))
