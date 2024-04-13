@@ -16,6 +16,7 @@ import HLox.Data.Expr
 import HLox.Data.Stmt
 import Data.Either (fromRight)
 import Data.Monoid
+import Data.Functor
 
 type ParseErrors = Dual [Token]
 
@@ -54,16 +55,17 @@ synchronize = do
         EOF -> return ()
         _ -> advance >> synchronize
 
-
-panic :: Token -> Parser a
-panic tok = do
+-- | Reports a parse error, but continues.
+reportError :: Token -> String -> Parser ()
+reportError tok msg = do
+    lift.lift $ report (Base.parseError tok msg)
     modify (\(ev, toks) -> (ev <> Dual [tok], toks))
-    throwError ()
 
+-- | Reports a parse error and panics
 parseError :: Token -> String -> Parser a
 parseError tok msg = do
-    lift.lift $ report (Base.parseError tok msg)
-    panic tok
+    reportError tok msg
+    throwError ()
 
 peekToken :: Parser Token
 peekToken = gets (head.snd)
@@ -138,7 +140,21 @@ prefixOperators :: [TokenType]
 prefixOperators = map Operator [O_Bang, O_Minus]
 
 expr :: Parser Expr
-expr = foldr infixLStream (prefixStream prefixOperators primary) infixOperators
+expr = assignment
+
+assignment :: Parser Expr
+assignment = do
+    lhs <- baseExpr
+    match [Operator O_Equal] >>= maybe (return lhs) (assign' lhs)
+    where
+        assign' lhs eqTok = do
+            rhs <- assignment
+            case lhs of
+                Variable name -> return $ Assign name rhs
+                _ -> lhs <$ reportError eqTok ("Invalid assignment target: " ++ show lhs)
+
+baseExpr :: Parser Expr
+baseExpr = foldr infixLStream (prefixStream prefixOperators primary) infixOperators
     where
     primary = do
         tok <- takeToken
@@ -154,6 +170,15 @@ expr = foldr infixLStream (prefixStream prefixOperators primary) infixOperators
                 return $ Grouping e
             _ -> parseError tok "Expected an expression."
 
+-- | Parses a block, not including the open brace at the start, but including the close brace at the end.
+block :: Parser [Stmt]
+block = do
+    tok <- peekToken
+    case _type tok of
+        EOF -> parseError tok "Expected '}' at end of block." $> []
+        (Close Brace) -> advance $> []
+        _ -> maybe id (:) <$> decl <*> block
+
 stmt :: Parser Stmt
 stmt = do
     tok <- peekToken
@@ -163,6 +188,9 @@ stmt = do
             e <- expr
             consume Semicolon "Expected ';' after value."
             return $ Print e
+        (Open Brace) -> do
+            advance
+            Block <$> block
         _ -> do
             e <- expr
             consume Semicolon "Expected ';' after expression."

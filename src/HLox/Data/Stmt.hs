@@ -9,4 +9,5 @@ data Stmt
     = Print Expr -- ^ print expr;
     | Expr Expr -- ^ expr;
     | Var Token (Maybe Expr) -- ^ var token [= expr];
+    | Block [Stmt] -- ^ { stmt... }
     deriving (Eq, Ord, Show)

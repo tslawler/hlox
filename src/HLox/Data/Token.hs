@@ -33,7 +33,7 @@ data LitToken
     | LT_Num Double
     deriving (Eq, Ord, Show)
 
-data Brace = Paren | Bracket deriving (Eq, Ord, Show, Bounded)
+data Brace = Paren | Brace deriving (Eq, Ord, Show, Bounded)
 
 data OpToken
     = O_Plus

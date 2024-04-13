@@ -49,8 +49,8 @@ scanToken = do
     case c of
         '(' -> addToken (Open Paren)
         ')' -> addToken (Close Paren)
-        '{' -> addToken (Open Bracket)
-        '}' -> addToken (Close Bracket)
+        '{' -> addToken (Open Brace)
+        '}' -> addToken (Close Brace)
         ',' -> addToken Comma
         '.' -> addToken Dot
         ';' -> addToken Semicolon

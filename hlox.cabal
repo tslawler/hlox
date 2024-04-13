@@ -62,6 +62,7 @@ library
   exposed-modules:
       HLox
     , HLox.Control.Base
+    , HLox.Control.Env
     , HLox.Control.Interpreter
     , HLox.Control.Parser
     , HLox.Control.Pretty

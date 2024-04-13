@@ -10,6 +10,7 @@ data Expr
     | Grouping Expr
     | Literal Literal
     | Variable Token
+    | Assign Token Expr
     deriving (Eq, Ord, Show)
 
 data Literal

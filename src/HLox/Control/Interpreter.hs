@@ -1,29 +1,36 @@
-{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 module HLox.Control.Interpreter (
     Runtime, withRuntime, eval, exec, runProgram
 ) where
 
 import Prelude hiding (lookup)
 import qualified HLox.Control.Base as Base
+import HLox.Control.Env
 import HLox.Data.Expr
 import HLox.Data.Stmt
 import HLox.Data.Value
 import HLox.Data.Token
 import Control.Monad.RWS
 import Data.Foldable
-import qualified Data.Map as M
 
-type Env = ()
-type State = M.Map String Value
-type Runtime = RWST Env () State Base.HLox
+newtype State = S {
+    _env :: Env
+}
+type Runtime = RWST () () State Base.HLox
 
-initEnv :: Env
-initEnv = ()
+getEnv :: Runtime Env
+getEnv = gets _env
+
+putEnv :: Env -> Runtime ()
+putEnv e = modify (\(S _) -> S e)
+
+modifyEnv :: (Env -> Env) -> Runtime ()
+modifyEnv f = modify (\(S e) -> S (f e))
+
 initState :: State
-initState = M.empty
+initState = S globalEnv
 
 withRuntime :: Runtime a -> Base.HLox a
-withRuntime rt = fst <$> evalRWST rt initEnv initState
+withRuntime rt = fst <$> evalRWST rt () initState
 
 runtimeError :: Token -> String -> Runtime a
 runtimeError tok msg = lift $ Base.throw (Base.runtimeError tok msg)
@@ -58,33 +65,48 @@ checkTypesMatch l r tok = unless (typeMatch l r) $
 equality :: (Eq a) => TokenType -> a -> a -> Bool
 equality (Operator O_EqualEqual) = (==)
 equality (Operator O_BangEqual) = (/=)
+equality _ = error "Bug in equality"
 
 comparison :: (Ord a) => TokenType -> a -> a -> Bool
 comparison (Operator O_Less) = (<)
 comparison (Operator O_LessEqual) = (<=)
 comparison (Operator O_Greater) = (>)
 comparison (Operator O_GreaterEqual) = (>=)
+comparison _ = error "Bug in comparison"
 
 numeric :: (Fractional a) => TokenType -> a -> a -> a
 numeric (Operator O_Minus) = (-)
 numeric (Operator O_Star) = (*)
 numeric (Operator O_Slash) = (/)
+numeric _ = error "Bug in numeric"
 
 plus :: Value -> Value -> Value
 plus (VNum a) (VNum b) = VNum (a + b)
 plus (VStr a) (VStr b) = VStr (a ++ b)
+plus _ _ = error "Bug in plus"
 
-define :: String -> Value -> Runtime ()
-define name val = modify (M.insert name val)
+assign' :: Token -> Value -> Runtime Value
+assign' tok val = let name = _lexeme tok in do
+    env <- getEnv
+    let mbEnv = assign name val env
+    case mbEnv of
+        Nothing -> runtimeError tok $ "Undefined variable '" ++ name ++ "'."
+        (Just env') -> putEnv env'
+    return val
 
-lookup :: Token -> Runtime Value
-lookup tok = 
-    gets (M.lookup (_lexeme tok)) >>= maybe (runtimeError tok $ "Undefined variable '" ++ _lexeme tok ++ "'.") return
-
+lookup' :: Token -> Runtime Value
+lookup' tok = let name = _lexeme tok in do
+    mbVal <- lookup name <$> getEnv
+    case mbVal of
+        Nothing -> runtimeError tok $ "Undefined variable '" ++ name ++ "'."
+        (Just val) -> return val
 
 eval :: Expr -> Runtime Value
 eval (Literal l) = return (fromLiteral l)
-eval (Variable tok) = lookup tok
+eval (Variable tok) = lookup' tok
+eval (Assign tok e) = do
+    v <- eval e
+    assign' tok v
 eval (Grouping e) = eval e
 eval (Unary tok e) 
     | _type tok == Operator O_Bang = do {
@@ -132,10 +154,14 @@ exec (Print e) = do
     v <- eval e
     lift.lift $ print v
 exec (Expr e) = void (eval e)
-exec (Var var Nothing) = define (_lexeme var) VNil
+exec (Var var Nothing) = modifyEnv (define (_lexeme var) VNil)
 exec (Var var (Just e)) = do
     val <- eval e
-    define (_lexeme var) val
+    modifyEnv (define (_lexeme var) val)
+exec (Block stmts) = do
+    modifyEnv newScope
+    traverse_ exec stmts
+    modifyEnv dropScope
 
 runProgram :: [Stmt] -> Runtime ()
 runProgram = traverse_ exec
