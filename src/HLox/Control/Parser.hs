@@ -192,6 +192,12 @@ stmt = do
             consume (Close Paren) "Expected ')' after condition."
             thn <- stmt
             match [Reserved R_Else] >>= maybe (return $ If cond thn Nothing) (\_ -> If cond thn . Just <$> stmt)
+        (Reserved R_While) -> do
+            advance
+            consume (Open Paren) "Expected '(' after 'while'."
+            cond <- expr
+            consume (Close Paren) "Expected ')' after condition."
+            While cond <$> stmt
         (Reserved R_Print) -> do
             advance
             e <- expr

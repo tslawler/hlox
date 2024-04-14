@@ -170,6 +170,11 @@ exec (Block stmts) = do
 exec (If cond thn els) = do
     val <- eval cond
     if truthy val then exec thn else traverse_ exec els
+exec (While cond body) = loop
+    where loop = do {
+        val <- eval cond;
+        when (truthy val) $ exec body *> loop
+    }
 
 runProgram :: [Stmt] -> Runtime ()
 runProgram = traverse_ exec

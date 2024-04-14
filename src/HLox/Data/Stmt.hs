@@ -11,4 +11,5 @@ data Stmt
     | Var Token (Maybe Expr) -- ^ var token [= expr];
     | Block [Stmt] -- ^ { stmt... }
     | If Expr Stmt (Maybe Stmt) -- ^ if (expr) thenStmt [else elseStmt]
+    | While Expr Stmt -- ^ while (expr) body
     deriving (Eq, Ord, Show)
