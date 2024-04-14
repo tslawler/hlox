@@ -113,6 +113,10 @@ type OpTable = [Operations]
 opTable :: OpTable
 opTable = [
     -- Assignment is excluded, we handle it separately.
+    -- Or
+    InfixL Logic $ Reserved <$> [R_Or],
+    -- And
+    InfixL Logic $ Reserved <$> [R_And],
     -- Equality
     InfixL Binary $ Operator <$> [O_EqualEqual, O_BangEqual],
     -- Comparison
@@ -181,6 +185,13 @@ stmt :: Parser Stmt
 stmt = do
     tok <- peekToken
     case _type tok of
+        (Reserved R_If) -> do
+            advance
+            consume (Open Paren) "Expected '(' after 'if'."
+            cond <- expr
+            consume (Close Paren) "Expected ')' after condition."
+            thn <- stmt
+            match [Reserved R_Else] >>= maybe (return $ If cond thn Nothing) (\_ -> If cond thn . Just <$> stmt)
         (Reserved R_Print) -> do
             advance
             e <- expr

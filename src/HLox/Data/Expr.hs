@@ -6,6 +6,7 @@ import HLox.Data.Token
 
 data Expr
     = Binary Expr Token Expr
+    | Logic Expr Token Expr
     | Unary Token Expr
     | Grouping Expr
     | Literal Literal

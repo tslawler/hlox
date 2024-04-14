@@ -19,6 +19,7 @@ prettify (Grouping body) = parens ["group", prettify body]
 prettify (Unary tok body) = parens [_lexeme tok, prettify body]
 prettify (Variable tok) = _lexeme tok
 prettify (Binary lhs tok rhs) = parens [_lexeme tok, prettify lhs, prettify rhs]
+prettify (Logic lhs tok rhs) = parens [_lexeme tok, prettify lhs, prettify rhs]
 prettify (Assign tok expr) = parens ["assign", _lexeme tok, prettify expr]
 
 print :: Expr -> IO ()

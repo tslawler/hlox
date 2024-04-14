@@ -45,10 +45,6 @@ fromLiteral LitFalse = VBool False
 fromLiteral LitTrue = VBool True
 fromLiteral LitNil = VNil
 
-checkBool :: Value -> Token -> Runtime Bool
-checkBool (VBool b) _ = return b
-checkBool v tok = runtimeError tok ("Operand must be a Boolean: " ++ show v)
-
 checkNum :: Value -> Token -> Runtime Double
 checkNum (VNum n) _ = return n
 checkNum v tok = runtimeError tok ("Operand must be a Number: " ++ show v)
@@ -108,11 +104,10 @@ eval (Assign tok e) = do
     v <- eval e
     assign' tok v
 eval (Grouping e) = eval e
-eval (Unary tok e) 
+eval (Unary tok e)
     | _type tok == Operator O_Bang = do {
         v <- eval e;
-        b <- checkBool v tok;
-        return $ VBool (not b)
+        return $ VBool (not (truthy v))
     }
     | _type tok == Operator O_Minus = do {
         v <- eval e;
@@ -148,6 +143,16 @@ eval (Binary lhs tok rhs)
         return (plus l r)
     }
     | otherwise = unimplemented $ "sorry, but the operator " ++ _lexeme tok ++ " is not implemented yet :<"
+eval (Logic lhs tok rhs)
+    | _type tok == Reserved R_And = do {
+        lv <- eval lhs;
+        if truthy lv then eval rhs else return (VBool False)
+    }
+    | _type tok == Reserved R_Or = do {
+        lv <- eval lhs;
+        if truthy lv then return (VBool True) else eval rhs
+    }
+    | otherwise = error "Invalid logic operator?!"
 
 exec :: Stmt -> Runtime ()
 exec (Print e) = do
@@ -162,6 +167,9 @@ exec (Block stmts) = do
     modifyEnv newScope
     traverse_ exec stmts
     modifyEnv dropScope
+exec (If cond thn els) = do
+    val <- eval cond
+    if truthy val then exec thn else traverse_ exec els
 
 runProgram :: [Stmt] -> Runtime ()
 runProgram = traverse_ exec
