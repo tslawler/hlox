@@ -13,3 +13,9 @@ data Stmt
     | If Expr Stmt (Maybe Stmt) -- ^ if (expr) thenStmt [else elseStmt]
     | While Expr Stmt -- ^ while (expr) body
     deriving (Eq, Ord, Show)
+
+instance Semigroup Stmt where
+    (Block xs) <> (Block ys) = Block (xs <> ys)
+    x <> (Block ys) = Block (x:ys)
+    (Block xs) <> y = Block (xs ++ [y])
+    x <> y = Block [x,y]

@@ -181,6 +181,33 @@ block = do
         (Close Brace) -> advance $> []
         _ -> maybe id (:) <$> decl <*> block
 
+exprStmt :: Parser Stmt
+exprStmt = do
+    e <- expr
+    consume Semicolon "Expected ';' after expression."
+    return $ Expr e
+
+-- | Desugars a `for` statement into a `while`.
+forStmt :: Parser Stmt
+forStmt = do
+    consume (Open Paren) "Expected '(' after 'for'."
+    initStart <- peekToken
+    initializer <- case _type initStart of
+        Semicolon -> advance $> Nothing
+        (Reserved R_Var) -> advance *> (pure <$> varStmt)
+        _ -> pure <$> exprStmt
+    noCondition <- (== Semicolon) . _type <$> peekToken
+    cond <- if noCondition then return (Literal LitTrue) else expr
+    consume Semicolon "Expected ';' after for condition."
+    incrStart <- peekToken
+    increment <- case _type incrStart of
+        (Close Paren) -> return Nothing
+        _ -> pure.Expr <$> expr
+    consume (Close Paren) "Expected ')' after for clauses."
+    body <- stmt
+    let body' = While cond (maybe body (body <>) increment)
+    return $ maybe body' (<> body') initializer
+
 stmt :: Parser Stmt
 stmt = do
     tok <- peekToken
@@ -198,6 +225,7 @@ stmt = do
             cond <- expr
             consume (Close Paren) "Expected ')' after condition."
             While cond <$> stmt
+        (Reserved R_For) -> advance *> forStmt
         (Reserved R_Print) -> do
             advance
             e <- expr
@@ -206,22 +234,22 @@ stmt = do
         (Open Brace) -> do
             advance
             Block <$> block
-        _ -> do
-            e <- expr
-            consume Semicolon "Expected ';' after expression."
-            return $ Expr e
+        _ -> exprStmt
+
+-- | Parse the portion of a 'Var' statement after the initial 'var'.
+varStmt :: Parser Stmt
+varStmt = do
+    tok <- takeToken
+    unless (isIdentifier (_type tok)) $ parseError tok "Expected identifier after 'var'."
+    mexpr <- match [Operator O_Equal] >>= maybe (return Nothing) (\_ -> Just <$> expr)
+    consume Semicolon "Expected ';' after variable declaration."
+    return $ Var tok mexpr
 
 decl' :: Parser Stmt
 decl' = do
     start <- peekToken
     case _type start of
-        (Reserved R_Var) -> do
-            advance
-            tok <- takeToken
-            unless (isIdentifier (_type tok)) $ parseError tok "Expected identifier after 'var'."
-            mexpr <- match [Operator O_Equal] >>= maybe (return Nothing) (\_ -> Just <$> expr)
-            consume Semicolon "Expected ';' after variable declaration."
-            return $ Var tok mexpr
+        (Reserved R_Var) -> advance *> varStmt
         _ -> stmt
 
 decl :: Parser (Maybe Stmt)
