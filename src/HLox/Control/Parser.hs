@@ -101,43 +101,41 @@ consumeP predicate msg = do
 consume :: TokenType -> String -> Parser ()
 consume typ = consumeP (== typ)
 
--- | Parses a sequence of `next` separated by `matchingTypes`, left-associative.
-infixLStream :: [TokenType] -> Parser Expr -> Parser Expr
-infixLStream matchingTypes next = next >>= go
-    where
-    go acc = do
-        mbTok <- match matchingTypes
-        case mbTok of
-            Nothing -> return acc
-            (Just tok) -> next >>= go . Binary acc tok
+data Operations =
+    Prefix (Token -> Expr -> Expr) [TokenType]
+    | InfixL (Expr -> Token -> Expr -> Expr) [TokenType]
+    | InfixR (Expr -> Token -> Expr -> Expr) [TokenType]
 
--- | Parses a `next` preceded by any number of `matchingTypes`.
-prefixStream :: [TokenType] -> Parser Expr -> Parser Expr
-prefixStream matchingTypes next = go
-    where
-    go = do
-        mbTok <- match matchingTypes
-        case mbTok of
-            Nothing -> next
-            (Just tok) -> Unary tok <$> go
+type OpTable = [Operations]
 
 -- | List of infix operators, ordered low->high precedence.
 -- | Operators of the same precedence are grouped.
-infixOperators :: [[TokenType]]
-infixOperators = map (map Operator) [
+opTable :: OpTable
+opTable = [
+    -- Assignment is excluded, we handle it separately.
     -- Equality
-    [O_EqualEqual, O_BangEqual],
+    InfixL Binary $ Operator <$> [O_EqualEqual, O_BangEqual],
     -- Comparison
-    [O_Less, O_LessEqual, O_Greater, O_GreaterEqual],
+    InfixL Binary $ Operator <$> [O_Less, O_LessEqual, O_Greater, O_GreaterEqual],
     -- Addition
-    [O_Plus, O_Minus],
+    InfixL Binary $ Operator <$> [O_Plus, O_Minus],
     -- Multiplication
-    [O_Slash, O_Star]]
+    InfixL Binary $ Operator <$> [O_Slash, O_Star],
+    -- Prefix
+    Prefix Unary $ Operator <$> [O_Bang, O_Minus]]
 
--- | List of prefix operators.
--- | All prefix operators have the same precedence, so no need to sort them.
-prefixOperators :: [TokenType]
-prefixOperators = map Operator [O_Bang, O_Minus]
+operations :: Operations -> Parser Expr -> Parser Expr
+operations (InfixL f matchingTypes) next = next >>= go
+    where
+        go acc = match matchingTypes >>= maybe (return acc) (\tok -> next >>= go . f acc tok)
+operations (InfixR f matchingTypes) next = go
+    where
+        go = do
+            lhs <- next
+            match matchingTypes >>= maybe (return lhs) (\tok -> f lhs tok <$> go)
+operations (Prefix f matchingTypes) next = go
+    where
+        go = match matchingTypes >>= maybe next (\tok -> f tok <$> go)
 
 expr :: Parser Expr
 expr = assignment
@@ -154,7 +152,7 @@ assignment = do
                 _ -> lhs <$ reportError eqTok ("Invalid assignment target: " ++ show lhs)
 
 baseExpr :: Parser Expr
-baseExpr = foldr infixLStream (prefixStream prefixOperators primary) infixOperators
+baseExpr = foldr operations primary opTable
     where
     primary = do
         tok <- takeToken
