@@ -1,5 +1,5 @@
 module HLox.Data.Value (
-    Value(..), typeMatch
+    Value(..), typeMatch, truthy
 ) where
 
 data Value
@@ -10,7 +10,7 @@ data Value
     deriving (Eq)
 
 instance (Show Value) where
-    show (VStr str) = show str
+    show (VStr str) = str
     show (VNum d) =
         let (n,k) = properFraction d
         in if k == 0.0 then show (n :: Integer) else show d
@@ -24,3 +24,8 @@ typeMatch (VNum _) (VNum _) = True
 typeMatch (VBool _) (VBool _) = True
 typeMatch VNil VNil = True
 typeMatch _ _ = False
+
+truthy :: Value -> Bool
+truthy (VBool False) = False
+truthy VNil = False
+truthy _ = True
