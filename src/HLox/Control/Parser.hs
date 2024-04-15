@@ -93,10 +93,17 @@ takeToken = do
     advance
     return tok
 
-consumeP :: (TokenType -> Bool) -> String -> Parser ()
-consumeP predicate msg = do
+consumeP' ::  (TokenType -> Bool) -> String -> Parser Token
+consumeP' predicate msg = do
     tok <- takeToken
     unless (predicate (_type tok)) $ parseError tok msg
+    return tok
+
+consume' :: TokenType -> String -> Parser Token
+consume' typ = consumeP' (== typ)
+
+consumeP :: (TokenType -> Bool) -> String -> Parser ()
+consumeP predicate = void . consumeP' predicate
 
 consume :: TokenType -> String -> Parser ()
 consume typ = consumeP (== typ)
@@ -155,9 +162,23 @@ assignment = do
                 Variable name -> return $ Assign name rhs
                 _ -> lhs <$ reportError eqTok ("Invalid assignment target: " ++ show lhs)
 
-baseExpr :: Parser Expr
-baseExpr = foldr operations primary opTable
+commaList :: Parser a -> String -> Parser [a]
+commaList p kind = match [Close Paren] >>= maybe (more id) (\_ -> return [])
     where
+        more acc = do
+            e <- p
+            let acc' = acc . (e:)
+            match [Comma] >>= maybe (finish acc') (\_ -> more acc')
+        finish acc = consume' (Close Paren) "Expected ')' after arguments." >>= checkLen (acc [])
+        checkLen xs tok =
+            when (length xs >= 255) (reportError tok $ "Can't have more than 255 " ++ kind) $> xs
+
+baseExpr :: Parser Expr
+baseExpr = foldr operations call opTable
+    where
+    call = primary >>= go
+        where
+        go acc = match [Open Paren] >>= maybe (return acc) (\tok -> commaList expr "arguments" >>= go . Call acc tok)
     primary = do
         tok <- takeToken
         case _type tok of
@@ -231,6 +252,11 @@ stmt = do
             e <- expr
             consume Semicolon "Expected ';' after value."
             return $ Print e
+        (Reserved R_Return) -> do
+            returnToken <- takeToken
+            e <- expr
+            consume Semicolon "Expected ';' after return value."
+            return $ Return returnToken e
         (Open Brace) -> do
             advance
             Block <$> block
@@ -239,16 +265,28 @@ stmt = do
 -- | Parse the portion of a 'Var' statement after the initial 'var'.
 varStmt :: Parser Stmt
 varStmt = do
-    tok <- takeToken
-    unless (isIdentifier (_type tok)) $ parseError tok "Expected identifier after 'var'."
+    tok <- consumeP' isIdentifier "Expected identifier after 'var'."
     mexpr <- match [Operator O_Equal] >>= maybe (return Nothing) (\_ -> Just <$> expr)
     consume Semicolon "Expected ';' after variable declaration."
     return $ Var tok mexpr
+
+identifier :: Parser Token
+identifier = consumeP' isIdentifier "Expected identifier."
+
+-- | Parse the portion of a 'Fun' statement after the initial 'fun'.
+funStmt :: String -> Parser Stmt
+funStmt kind = do
+    tok <- consumeP' isIdentifier $ "Expected " ++ kind ++ " name."
+    consume (Open Paren) $ "Expected '(' after " ++ kind ++ " name."
+    params <- commaList identifier "parameters"
+    consume (Open Brace) $ "Expected '{' after " ++ kind ++ " parameters."
+    Fun tok params <$> block
 
 decl' :: Parser Stmt
 decl' = do
     start <- peekToken
     case _type start of
+        (Reserved R_Fun) -> advance *> funStmt "function"
         (Reserved R_Var) -> advance *> varStmt
         _ -> stmt
 

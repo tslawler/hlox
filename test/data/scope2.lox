@@ -1,0 +1,31 @@
+var get;
+var set;
+var a = "global";
+{
+    var a = "inner";
+    fun getA() {
+        return a;
+    }
+
+    fun setA(x) {
+        a = x;
+    }
+
+    get = getA;
+    set = setA;
+}
+
+print get();  // should print "inner"
+set("foo");
+print get();  // should print "foo"
+
+// This test doesn't yet do the right thing.
+//
+// The problem is similar to the one in Crafting Interpreters chapter 11 ("Resolving and Binding").
+// In JLox, the problem is that the Environment is being mutably updated every time a new variable is defined.
+// This means that redefining a variable in the same block level secretly **overwrites**, rather than **shadows**,
+// the existing variable.
+//
+// In HLox, however, we never mutate the Environment, just construct a new one. That solves the problem JLox has.
+// However, this creates a new problem: whenever a variable is written to, it is secretly **shadowed**, rather
+// than **overwritten**.

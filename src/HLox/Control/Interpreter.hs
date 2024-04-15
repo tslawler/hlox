@@ -1,5 +1,5 @@
 module HLox.Control.Interpreter (
-    Runtime, withRuntime, eval, exec, runProgram
+    Runtime, withRuntime, eval, exec, runProgram, liftHLox
 ) where
 
 import Prelude hiding (lookup)
@@ -9,34 +9,46 @@ import HLox.Data.Expr
 import HLox.Data.Stmt
 import HLox.Data.Value
 import HLox.Data.Token
-import Control.Monad.RWS
+import Control.Monad.State
 import Data.Foldable
+import Data.Time.Clock.System (SystemTime(..), getSystemTime)
+import Control.Monad.Except
+import Data.Functor
+import Data.Void
 
-newtype State = S {
+data Return = ReturnErr Token Value
+    deriving Show
+
+newtype RuntimeState = S {
     _env :: Env
 }
-type Runtime = RWST () () State Base.HLox
+type Runtime = StateT RuntimeState (Base.HLox' Return)
 
 getEnv :: Runtime Env
 getEnv = gets _env
 
-putEnv :: Env -> Runtime ()
-putEnv e = modify (\(S _) -> S e)
+setEnv :: Env -> Runtime ()
+setEnv e = modify (\(S _) -> S e)
 
 modifyEnv :: (Env -> Env) -> Runtime ()
 modifyEnv f = modify (\(S e) -> S (f e))
 
-initState :: State
+initState :: RuntimeState
 initState = S globalEnv
 
+liftHLox :: Base.HLox a -> Runtime a
+liftHLox = lift . withExceptT (fmap absurd)
+
 withRuntime :: Runtime a -> Base.HLox a
-withRuntime rt = fst <$> evalRWST rt () initState
+withRuntime rt = Base.withError badReturn $ evalStateT rt initState
+    where
+        badReturn (ReturnErr tok _) = Base.runtimeError tok "Cannot return from outside a function."
 
 runtimeError :: Token -> String -> Runtime a
-runtimeError tok msg = lift $ Base.throw (Base.runtimeError tok msg)
+runtimeError tok msg = liftHLox $ Base.throw (Base.runtimeError tok msg)
 
 unimplemented :: String -> Runtime a
-unimplemented msg = lift $ Base.throw (Base.unimplemented msg)
+unimplemented msg = liftHLox $ Base.throw (Base.unimplemented msg)
 
 fromLiteral :: Literal -> Value
 fromLiteral (LitNum d) = VNum d
@@ -87,7 +99,7 @@ assign' tok val = let name = _lexeme tok in do
     let mbEnv = assign name val env
     case mbEnv of
         Nothing -> runtimeError tok $ "Undefined variable '" ++ name ++ "'."
-        (Just env') -> putEnv env'
+        (Just env') -> setEnv env'
     return val
 
 lookup' :: Token -> Runtime Value
@@ -96,6 +108,20 @@ lookup' tok = let name = _lexeme tok in do
     case mbVal of
         Nothing -> runtimeError tok $ "Undefined variable '" ++ name ++ "'."
         (Just val) -> return val
+
+callFun :: LoxFun -> [Value] -> Runtime Value
+callFun (FFI Clock) _ = do
+    (MkSystemTime sec _) <- liftHLox.lift $ getSystemTime
+    return (VNum $ fromIntegral sec)
+callFun (LoxFun _ params body closure) args = do
+    oldEnv <- getEnv
+    setEnv closure
+    modifyEnv newScope
+    traverse_ (\(p,v) -> modifyEnv (define (_lexeme p) v)) (zip params args)
+    out <- Base.catchCustom (traverse_ exec body $> VNil) (\(ReturnErr _ v) -> return v)
+    setEnv oldEnv
+    return out
+
 
 eval :: Expr -> Runtime Value
 eval (Literal l) = return (fromLiteral l)
@@ -153,11 +179,20 @@ eval (Logic lhs tok rhs)
         if truthy lv then return (VBool True) else eval rhs
     }
     | otherwise = error "Invalid logic operator?!"
+eval (Call callee tok args) = do
+    fn <- eval callee
+    argv <- traverse eval args
+    case fn of
+        (VFun f) -> do
+            let n = length argv
+            when (n /= arity f) $ runtimeError tok $ "Expected " ++ show (arity f) ++ " arguments but got " ++ show n
+            callFun f argv
+        _ -> runtimeError tok "Can only call functions and classes."
 
 exec :: Stmt -> Runtime ()
 exec (Print e) = do
     v <- eval e
-    lift.lift $ print v
+    liftHLox.lift $ print v
 exec (Expr e) = void (eval e)
 exec (Var var Nothing) = modifyEnv (define (_lexeme var) VNil)
 exec (Var var (Just e)) = do
@@ -175,6 +210,12 @@ exec (While cond body) = loop
         val <- eval cond;
         when (truthy val) $ exec body *> loop
     }
+exec (Fun name params body) = do
+    closure <- getEnv
+    modifyEnv (define (_lexeme name) (VFun (LoxFun name params body closure)))
+exec (Return tok expr) = do
+    val <- eval expr
+    Base.throwCustom (ReturnErr tok val)
 
 runProgram :: [Stmt] -> Runtime ()
 runProgram = traverse_ exec

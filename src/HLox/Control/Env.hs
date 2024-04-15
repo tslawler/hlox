@@ -40,7 +40,7 @@ dropScope (_:|[]) = error "BUG: Can't drop the global scope!!!"
 
 -- | The global environment.
 globalEnv :: Env
-globalEnv = M.empty :| []
+globalEnv = M.fromList [("clock", VFun (FFI Clock))] :| []
 
 -- | Define a new name in the current local environment.
 define :: String -> Value -> Env -> Env

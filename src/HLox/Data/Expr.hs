@@ -8,6 +8,7 @@ data Expr
     = Binary Expr Token Expr
     | Logic Expr Token Expr
     | Unary Token Expr
+    | Call Expr Token [Expr]
     | Grouping Expr
     | Literal Literal
     | Variable Token

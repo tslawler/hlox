@@ -13,12 +13,12 @@ import HLox.Control.Base (runHLox)
 import qualified HLox.Control.Scanner as Scanner
 import qualified HLox.Control.Parser as Parser
 import qualified HLox.Control.Interpreter as Interpreter
-import HLox.Control.Interpreter (Runtime, withRuntime)
+import HLox.Control.Interpreter (Runtime, withRuntime, liftHLox)
 
 run :: String -> Runtime ()
 run code = do
-    tokens <- lift $ Scanner.lex code
-    prog <- lift $ Parser.parseProgram tokens
+    tokens <- liftHLox $ Scanner.lex code
+    prog <- liftHLox $ Parser.parseProgram tokens
     Interpreter.runProgram prog
 
 runRepl :: IO ()
@@ -36,7 +36,7 @@ prompt = do
 
 repl :: Runtime a
 repl = do
-    input <- lift.lift $ prompt
+    input <- liftHLox.lift $ prompt
     E.catchError (run input) (\_ -> return ())
     repl
 
