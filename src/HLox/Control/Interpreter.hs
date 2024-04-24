@@ -16,21 +16,25 @@ import Control.Monad.Except
 import Data.Functor
 import Data.Void
 
+-- | The global environment.
+globalEnv :: Env Value
+globalEnv = define "clock" (VFun (FFI Clock)) emptyEnv
+
 data Return = ReturnErr Token Value
     deriving Show
 
 newtype RuntimeState = S {
-    _env :: Env
+    _env :: Env Value
 }
 type Runtime = StateT RuntimeState (Base.HLox' Return)
 
-getEnv :: Runtime Env
+getEnv :: Runtime (Env Value)
 getEnv = gets _env
 
-setEnv :: Env -> Runtime ()
+setEnv :: Env Value -> Runtime ()
 setEnv e = modify (\(S _) -> S e)
 
-modifyEnv :: (Env -> Env) -> Runtime ()
+modifyEnv :: (Env Value -> Env Value) -> Runtime ()
 modifyEnv f = modify (\(S e) -> S (f e))
 
 initState :: RuntimeState
