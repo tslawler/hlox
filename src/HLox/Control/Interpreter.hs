@@ -191,6 +191,9 @@ eval (Call callee tok args) = do
             let n = length argv
             when (n /= arity f) $ runtimeError tok $ "Expected " ++ show (arity f) ++ " arguments but got " ++ show n
             callFun f argv
+        (VClass c) -> do
+            unless (null argv) $ runtimeError tok $ "Expected 0 arguments but got " ++ show (length argv)
+            return $ VInstance c
         _ -> runtimeError tok "Can only call functions and classes."
 
 exec :: Stmt -> Runtime ()
@@ -214,9 +217,11 @@ exec (While cond body) = loop
         val <- eval cond;
         when (truthy val) $ exec body *> loop
     }
-exec (Fun name params body) = do
+exec (Fun (F name params body)) = do
     closure <- getEnv
     modifyEnv (define (_lexeme name) (VFun (LoxFun name params body closure)))
+exec (Class name _) = do -- TODO: capture closure, 
+    modifyEnv (define (_lexeme name) (VClass (LoxClass name)))
 exec (Return tok expr) = do
     val <- eval expr
     Base.throwCustom (ReturnErr tok val)

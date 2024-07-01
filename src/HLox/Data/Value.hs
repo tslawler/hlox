@@ -1,5 +1,5 @@
 module HLox.Data.Value (
-    Value(..), LoxFun(..), ForeignFun(..), typeMatch, truthy, arity
+    Value(..), LoxFun(..), LoxClass(..), ForeignFun(..), typeMatch, truthy, arity
 ) where
 
 import HLox.Data.Token
@@ -11,6 +11,11 @@ data ForeignFun = Clock deriving (Eq)
 
 type Scope = M.Map String Value
 type Env = NonEmpty Scope
+
+data LoxClass = LoxClass Token
+    deriving (Eq)
+instance Show LoxClass where
+    show (LoxClass t) = _lexeme t
 
 data LoxFun = 
     FFI ForeignFun
@@ -29,6 +34,8 @@ data Value
     | VNum !Double
     | VBool !Bool
     | VFun !LoxFun
+    | VClass !LoxClass
+    | VInstance !LoxClass
     | VNil
     deriving (Eq)
 
@@ -40,6 +47,8 @@ instance (Show Value) where
     show (VBool True) = "true"
     show (VBool False) = "false"
     show (VFun f) = show f
+    show (VClass c) = show c
+    show (VInstance c) = "<" ++ show c ++ " instance>"
     show VNil = "nil"
 
 typeMatch :: Value -> Value -> Bool

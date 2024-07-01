@@ -274,19 +274,38 @@ identifier :: Parser Token
 identifier = consumeP' isIdentifier "Expected identifier."
 
 -- | Parse the portion of a 'Fun' statement after the initial 'fun'.
-funStmt :: String -> Parser Stmt
+funStmt :: String -> Parser FunDecl
 funStmt kind = do
     tok <- consumeP' isIdentifier $ "Expected " ++ kind ++ " name."
     consume (Open Paren) $ "Expected '(' after " ++ kind ++ " name."
     params <- commaList identifier "parameters"
     consume (Open Brace) $ "Expected '{' after " ++ kind ++ " parameters."
-    Fun tok params <$> block
+    F tok params <$> block
+
+classStmt :: Parser Stmt
+classStmt = do
+    tok <- consumeP' isIdentifier "Expected class name."
+    -- TODO: inheritance
+    consume (Open Brace) "Expected '{' after class name."
+    methods <- go id
+    consume (Close Brace) "Expected '}' at end of class."
+    return $ Class tok methods
+  where
+    go f = do
+        tok <- peekToken
+        case _type tok of
+            EOF -> return $ f []
+            (Close Brace) -> return $ f []
+            _ -> do
+                method <- funStmt "method"
+                go (f.(method:))
 
 decl' :: Parser Stmt
 decl' = do
     start <- peekToken
     case _type start of
-        (Reserved R_Fun) -> advance *> funStmt "function"
+        (Reserved R_Fun) -> advance *> (Fun <$> funStmt "function")
+        (Reserved R_Class) -> advance *> classStmt
         (Reserved R_Var) -> advance *> varStmt
         _ -> stmt
 
