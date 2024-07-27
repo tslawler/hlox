@@ -10,8 +10,7 @@ bagel.kind = "sesame";
 
 print bagel.toasted;  // should print "true"
 print bagel.kind;  // should print "sesame"
-// TODO: implement methods
-// bagel.eat();  // should print "yum!"
+bagel.eat();  // should print "yum!"
 
 bagel.kind = "everything";
 print bagel.kind;  // should print "everything"

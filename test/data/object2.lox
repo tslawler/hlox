@@ -1,0 +1,23 @@
+class Bagel {
+    eat() {
+        print "yum! " + this.kind + " bagel!";
+    }
+}
+
+var bagel = Bagel();
+bagel.kind = "sesame";
+
+bagel.eat();  // should print "yum! sesame bagel!"
+
+bagel.kind = "everything";
+bagel.eat();  // should print "yum! everything bagel!"
+
+var donut = Bagel();
+
+donut.kind = "boston creme";
+donut.eat();  // should print "yum! boston creme bagel!"
+
+donut.eat = bagel.eat;
+donut.eat();  // should print "yum! everything bagel!"
+bagel.kind = "plain";
+donut.eat();  // should print "yum! plain bagel!"

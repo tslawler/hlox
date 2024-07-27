@@ -24,6 +24,7 @@ prettify (Assign tok expr) = parens ["assign", _lexeme tok, prettify expr]
 prettify (Call expr _ exprs) = parens $ ["call", prettify expr] ++ map prettify exprs
 prettify (Get expr tok) = parens ["get", prettify expr, _lexeme tok]
 prettify (Set lhs tok rhs) = parens ["set", prettify lhs, _lexeme tok, prettify rhs]
+prettify (This _) = "this"
 
 print :: Expr -> IO ()
 print expr = putStrLn (prettify expr)

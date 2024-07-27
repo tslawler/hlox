@@ -119,11 +119,11 @@ lookup' tok = let name = _lexeme tok in do
         Nothing -> runtimeError tok $ "Undefined variable '" ++ name ++ "'."
         (Just ref) -> liftIO $ readIORef ref
 
-callFun :: LoxFun -> [Value] -> Runtime Value
+callFun :: LoxCallable -> [Value] -> Runtime Value
 callFun (FFI Clock) _ = do
     (MkSystemTime sec _) <- liftHLox.lift $ getSystemTime
     return (VNum $ fromIntegral sec)
-callFun (LoxFun _ params body closure) args = do
+callFun (CallableFun (LoxFun _ params body closure)) args = do
     oldEnv <- getEnv
     setEnv closure
     modifyEnv newScope
@@ -132,10 +132,16 @@ callFun (LoxFun _ params body closure) args = do
     setEnv oldEnv
     return out
 
+makeMethod :: Value -> LoxFun -> Runtime Value
+makeMethod this (LoxFun nm par bod closure) = do
+    newClosure <- liftIO $ define "this" this closure
+    return $ VFun (CallableFun (LoxFun nm par bod newClosure))
+
 
 eval :: Expr -> Runtime Value
 eval (Literal l) = return (fromLiteral l)
 eval (Variable tok) = lookup' tok
+eval (This tok) = lookup' tok
 eval (Assign tok e) = do
     v <- eval e
     assign' tok v
@@ -205,11 +211,13 @@ eval (Call callee tok args) = do
 eval (Get target tok) = do
     lhs <- eval target
     case lhs of
-        (VInstance _ store) -> do
+        this@(VInstance (LoxClass _ methods) store) -> do
             contents <- liftIO $ readIORef store
             case M.lookup (_lexeme tok) contents of
-                Nothing -> runtimeError tok $ "Undefined property '" ++ _lexeme tok ++ "'."
                 (Just val) -> return val
+                Nothing -> case M.lookup (_lexeme tok) methods of
+                    (Just fn) -> makeMethod this fn
+                    Nothing -> runtimeError tok $ "Undefined property '" ++ _lexeme tok ++ "'."
         _ -> runtimeError tok "Only instances have properties."
 eval (Set target tok expr) = do
     lhs <- eval target
@@ -244,9 +252,13 @@ exec (While cond body) = loop
     }
 exec (Fun (F name params body)) = do
     closure <- getEnv
-    modifyEnv' (define (_lexeme name) (VFun (LoxFun name params body closure)))
+    modifyEnv' (define (_lexeme name) (VFun (CallableFun (LoxFun name params body closure))))
 exec (Class name methods) = do
-    modifyEnv' (define (_lexeme name) (VClass (LoxClass name methods)))
+    modifyEnv newScope -- New scope to hold `this`
+    closure <- getEnv
+    let methodMap = M.fromList [(_lexeme fname, LoxFun fname params body closure) | (F fname params body) <- methods]
+    modifyEnv dropScope
+    modifyEnv' (define (_lexeme name) (VClass (LoxClass name methodMap)))
 exec (Return tok expr) = do
     val <- eval expr
     Base.throwCustom (ReturnErr tok val)

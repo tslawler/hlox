@@ -1,5 +1,5 @@
 module HLox.Data.Value (
-    Value(..), LoxFun(..), LoxClass(..), ForeignFun(..), typeMatch, truthy, arity
+    Value(..), LoxFun(..), LoxCallable(..), LoxClass(..), ForeignFun(..), typeMatch, truthy, arity
 ) where
 
 import HLox.Data.Token
@@ -13,28 +13,31 @@ data ForeignFun = Clock deriving (Eq)
 type Scope = M.Map String (IORef Value)
 type Env = NonEmpty Scope
 
-data LoxClass = LoxClass Token [FunDecl]
+data LoxClass = LoxClass Token (M.Map String LoxFun)
     deriving (Eq)
 instance Show LoxClass where
     show (LoxClass t _) = _lexeme t
 
-data LoxFun = 
-    FFI ForeignFun
-    | LoxFun { _name :: Token, _params :: [Token], _body :: [Stmt], _closure :: Env }
+data LoxFun = LoxFun { _name :: Token, _params :: [Token], _body :: [Stmt], _closure :: Env }
     deriving (Eq)
 
-arity :: LoxFun -> Int
+data LoxCallable = 
+    FFI ForeignFun
+    | CallableFun LoxFun
+    deriving (Eq)
+
+arity :: LoxCallable -> Int
 arity (FFI Clock) = 0
-arity (LoxFun _ ps _ _) = length ps
-instance Show LoxFun where
+arity (CallableFun (LoxFun _ ps _ _)) = length ps
+instance Show LoxCallable where
     show (FFI Clock) = "<native function clock>"
-    show (LoxFun nm _ _ _) = "<function " ++ _lexeme nm ++ ">"
+    show (CallableFun (LoxFun nm _ _ _)) = "<function " ++ _lexeme nm ++ ">"
 
 data Value
     = VStr !String
     | VNum !Double
     | VBool !Bool
-    | VFun !LoxFun
+    | VFun !LoxCallable
     | VClass !LoxClass
     | VInstance !LoxClass (IORef (M.Map String Value))
     | VNil

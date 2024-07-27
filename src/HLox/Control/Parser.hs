@@ -193,6 +193,7 @@ baseExpr = foldr operations call opTable
             (Reserved R_True) -> return.Literal $ LitTrue
             (Reserved R_False) -> return.Literal $ LitFalse
             (Reserved R_Nil) -> return.Literal $ LitNil
+            (Reserved R_This) -> return.This $ tok
             (Open Paren) -> do
                 e <- expr
                 consume (Close Paren) "Expected ')' after expression."
