@@ -160,6 +160,7 @@ assignment = do
             rhs <- assignment
             case lhs of
                 Variable name -> return $ Assign name rhs
+                Get target token -> return $ Set target token rhs
                 _ -> lhs <$ reportError eqTok ("Invalid assignment target: " ++ show lhs)
 
 commaList :: Parser a -> String -> Parser [a]
@@ -178,7 +179,12 @@ baseExpr = foldr operations call opTable
     where
     call = primary >>= go
         where
-        go acc = match [Open Paren] >>= maybe (return acc) (\tok -> commaList expr "arguments" >>= go . Call acc tok)
+        go acc = do
+            tok <- peekToken
+            case _type tok of
+                Open Paren -> advance >> commaList expr "arguments" >>= go . Call acc tok
+                Dot -> advance >> consumeP' isIdentifier "Expected property name after '.'" >>= go . Get acc
+                _ -> return acc
     primary = do
         tok <- takeToken
         case _type tok of

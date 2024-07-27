@@ -6,16 +6,17 @@ import HLox.Data.Token
 import HLox.Data.Stmt
 import qualified Data.Map as M
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.IORef
 
 data ForeignFun = Clock deriving (Eq)
 
-type Scope = M.Map String Value
+type Scope = M.Map String (IORef Value)
 type Env = NonEmpty Scope
 
-data LoxClass = LoxClass Token
+data LoxClass = LoxClass Token [FunDecl]
     deriving (Eq)
 instance Show LoxClass where
-    show (LoxClass t) = _lexeme t
+    show (LoxClass t _) = _lexeme t
 
 data LoxFun = 
     FFI ForeignFun
@@ -35,7 +36,7 @@ data Value
     | VBool !Bool
     | VFun !LoxFun
     | VClass !LoxClass
-    | VInstance !LoxClass
+    | VInstance !LoxClass Scope
     | VNil
     deriving (Eq)
 
@@ -48,7 +49,7 @@ instance (Show Value) where
     show (VBool False) = "false"
     show (VFun f) = show f
     show (VClass c) = show c
-    show (VInstance c) = "<" ++ show c ++ " instance>"
+    show (VInstance c _) = "<" ++ show c ++ " instance>"
     show VNil = "nil"
 
 typeMatch :: Value -> Value -> Bool

@@ -19,7 +19,7 @@ print get();  // should print "inner"
 set("foo");
 print get();  // should print "foo"
 
-// This test doesn't yet do the right thing.
+// This test was a tricky problem to fix.
 //
 // The problem is similar to the one in Crafting Interpreters chapter 11 ("Resolving and Binding").
 // In JLox, the problem is that the Environment is being mutably updated every time a new variable is defined.
@@ -29,3 +29,5 @@ print get();  // should print "foo"
 // In HLox, however, we never mutate the Environment, just construct a new one. That solves the problem JLox has.
 // However, this creates a new problem: whenever a variable is written to, it is secretly **shadowed**, rather
 // than **overwritten**.
+//
+// The solution was to have the environments store IORefs to Values, rather than Values themselves.

@@ -15,36 +15,44 @@ import Data.Time.Clock.System (SystemTime(..), getSystemTime)
 import Control.Monad.Except
 import Data.Functor
 import Data.Void
+import qualified Data.Map as M
+import Data.IORef
 
 -- | The global environment.
-globalEnv :: Env Value
+globalEnv :: IO (Env (IORef Value))
 globalEnv = define "clock" (VFun (FFI Clock)) emptyEnv
 
 data Return = ReturnErr Token Value
     deriving Show
 
 newtype RuntimeState = S {
-    _env :: Env Value
+    _env :: Env (IORef Value)
 }
 type Runtime = StateT RuntimeState (Base.HLox' Return)
 
-getEnv :: Runtime (Env Value)
+getEnv :: Runtime (Env (IORef Value))
 getEnv = gets _env
 
-setEnv :: Env Value -> Runtime ()
+setEnv :: Env (IORef Value) -> Runtime ()
 setEnv e = modify (\(S _) -> S e)
 
-modifyEnv :: (Env Value -> Env Value) -> Runtime ()
+modifyEnv :: (Env (IORef Value) -> Env (IORef Value)) -> Runtime ()
 modifyEnv f = modify (\(S e) -> S (f e))
 
-initState :: RuntimeState
-initState = S globalEnv
+modifyEnv' :: (Env (IORef Value) -> IO (Env (IORef Value))) -> Runtime ()
+modifyEnv' f = do
+    e <- getEnv
+    t <- liftIO $ f e
+    setEnv t
+
+initState :: IO RuntimeState
+initState = S <$> globalEnv
 
 liftHLox :: Base.HLox a -> Runtime a
 liftHLox = lift . withExceptT (fmap absurd)
 
 withRuntime :: Runtime a -> Base.HLox a
-withRuntime rt = Base.withError badReturn $ evalStateT rt initState
+withRuntime rt = Base.withError badReturn $ liftIO initState >>= evalStateT rt
     where
         badReturn (ReturnErr tok _) = Base.runtimeError tok "Cannot return from outside a function."
 
@@ -100,10 +108,8 @@ plus _ _ = error "Bug in plus"
 assign' :: Token -> Value -> Runtime Value
 assign' tok val = let name = _lexeme tok in do
     env <- getEnv
-    let mbEnv = assign name val env
-    case mbEnv of
-        Nothing -> runtimeError tok $ "Undefined variable '" ++ name ++ "'."
-        (Just env') -> setEnv env'
+    success <- liftIO $ assign name val env
+    unless success (runtimeError tok $ "Undefined variable '" ++ name ++ "'.")
     return val
 
 lookup' :: Token -> Runtime Value
@@ -111,7 +117,7 @@ lookup' tok = let name = _lexeme tok in do
     mbVal <- lookup name <$> getEnv
     case mbVal of
         Nothing -> runtimeError tok $ "Undefined variable '" ++ name ++ "'."
-        (Just val) -> return val
+        (Just ref) -> liftIO $ readIORef ref
 
 callFun :: LoxFun -> [Value] -> Runtime Value
 callFun (FFI Clock) _ = do
@@ -121,7 +127,7 @@ callFun (LoxFun _ params body closure) args = do
     oldEnv <- getEnv
     setEnv closure
     modifyEnv newScope
-    traverse_ (\(p,v) -> modifyEnv (define (_lexeme p) v)) (zip params args)
+    traverse_ (\(p,v) -> modifyEnv' (define (_lexeme p) v)) (zip params args)
     out <- Base.catchCustom (traverse_ exec body $> VNil) (\(ReturnErr _ v) -> return v)
     setEnv oldEnv
     return out
@@ -193,18 +199,35 @@ eval (Call callee tok args) = do
             callFun f argv
         (VClass c) -> do
             unless (null argv) $ runtimeError tok $ "Expected 0 arguments but got " ++ show (length argv)
-            return $ VInstance c
+            return $ VInstance c M.empty
         _ -> runtimeError tok "Can only call functions and classes."
+eval (Get target tok) = do
+    lhs <- eval target
+    case lhs of
+        (VInstance _ store) -> case M.lookup (_lexeme tok) store of
+            Nothing -> runtimeError tok $ "Undefined property '" ++ _lexeme tok ++ "'."
+            (Just ref) -> liftIO $ readIORef ref
+        _ -> runtimeError tok "Only instances have properties."
+eval (Set target tok expr) = do
+    lhs <- eval target
+    case lhs of
+        (VInstance _ store) -> case M.lookup (_lexeme tok) store of
+            Nothing -> runtimeError tok $ "Undefined property '" ++ _lexeme tok ++ "'."
+            (Just ref) -> do
+                rhs <- eval expr
+                liftIO $ writeIORef ref rhs
+                return rhs
+        _ -> runtimeError tok "Only instances have properties."
 
 exec :: Stmt -> Runtime ()
 exec (Print e) = do
     v <- eval e
     liftHLox.lift $ print v
 exec (Expr e) = void (eval e)
-exec (Var var Nothing) = modifyEnv (define (_lexeme var) VNil)
+exec (Var var Nothing) = modifyEnv' (define (_lexeme var) VNil)
 exec (Var var (Just e)) = do
     val <- eval e
-    modifyEnv (define (_lexeme var) val)
+    modifyEnv' (define (_lexeme var) val)
 exec (Block stmts) = do
     modifyEnv newScope
     traverse_ exec stmts
@@ -219,9 +242,9 @@ exec (While cond body) = loop
     }
 exec (Fun (F name params body)) = do
     closure <- getEnv
-    modifyEnv (define (_lexeme name) (VFun (LoxFun name params body closure)))
-exec (Class name _) = do -- TODO: capture closure, 
-    modifyEnv (define (_lexeme name) (VClass (LoxClass name)))
+    modifyEnv' (define (_lexeme name) (VFun (LoxFun name params body closure)))
+exec (Class name methods) = do
+    modifyEnv' (define (_lexeme name) (VClass (LoxClass name methods)))
 exec (Return tok expr) = do
     val <- eval expr
     Base.throwCustom (ReturnErr tok val)

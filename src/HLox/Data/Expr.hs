@@ -9,6 +9,8 @@ data Expr
     | Logic Expr Token Expr
     | Unary Token Expr
     | Call Expr Token [Expr]
+    | Get Expr Token
+    | Set Expr Token Expr
     | Grouping Expr
     | Literal Literal
     | Variable Token

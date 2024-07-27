@@ -4,4 +4,4 @@ class DevonshireCream {
   }
 }
 
-print DevonshireCream();
+print DevonshireCream();  // should print "<DevonshireCream instance>"
