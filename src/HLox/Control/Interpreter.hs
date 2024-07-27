@@ -199,24 +199,26 @@ eval (Call callee tok args) = do
             callFun f argv
         (VClass c) -> do
             unless (null argv) $ runtimeError tok $ "Expected 0 arguments but got " ++ show (length argv)
-            return $ VInstance c M.empty
+            store <- liftIO $ newIORef M.empty
+            return $ VInstance c store
         _ -> runtimeError tok "Can only call functions and classes."
 eval (Get target tok) = do
     lhs <- eval target
     case lhs of
-        (VInstance _ store) -> case M.lookup (_lexeme tok) store of
-            Nothing -> runtimeError tok $ "Undefined property '" ++ _lexeme tok ++ "'."
-            (Just ref) -> liftIO $ readIORef ref
+        (VInstance _ store) -> do
+            contents <- liftIO $ readIORef store
+            case M.lookup (_lexeme tok) contents of
+                Nothing -> runtimeError tok $ "Undefined property '" ++ _lexeme tok ++ "'."
+                (Just val) -> return val
         _ -> runtimeError tok "Only instances have properties."
 eval (Set target tok expr) = do
     lhs <- eval target
     case lhs of
-        (VInstance _ store) -> case M.lookup (_lexeme tok) store of
-            Nothing -> runtimeError tok $ "Undefined property '" ++ _lexeme tok ++ "'."
-            (Just ref) -> do
-                rhs <- eval expr
-                liftIO $ writeIORef ref rhs
-                return rhs
+        (VInstance _ store) -> do
+            rhs <- eval expr
+            contents <- liftIO $ readIORef store
+            liftIO $ writeIORef store (M.insert (_lexeme tok) rhs contents)
+            return rhs
         _ -> runtimeError tok "Only instances have properties."
 
 exec :: Stmt -> Runtime ()

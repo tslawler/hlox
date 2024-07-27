@@ -36,7 +36,7 @@ data Value
     | VBool !Bool
     | VFun !LoxFun
     | VClass !LoxClass
-    | VInstance !LoxClass Scope
+    | VInstance !LoxClass (IORef (M.Map String Value))
     | VNil
     deriving (Eq)
 
