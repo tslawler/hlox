@@ -17,6 +17,8 @@ import Data.Functor
 import Data.Void
 import qualified Data.Map as M
 import Data.IORef
+import Control.Applicative
+import Data.Maybe
 
 -- | The global environment.
 globalEnv :: IO (Env (IORef Value))
@@ -135,8 +137,11 @@ callFun (CallableFun (LoxFun _ isInitializer params body closure)) args = do
         liftIO $ readIORef ref
     else return out
 
-makeMethod :: Value -> LoxFun -> Runtime Value
-makeMethod this (LoxFun nm isInit par bod closure) = do
+findMethod :: String -> LoxClass -> Maybe LoxFun
+findMethod name (LoxClass _ methods super) = M.lookup name methods <|> (super >>= findMethod name)
+
+bindMethod :: Value -> LoxFun -> Runtime Value
+bindMethod this (LoxFun nm isInit par bod closure) = do
     newClosure <- liftIO $ define "this" this closure
     return $ VFun (CallableFun (LoxFun nm isInit par bod newClosure))
 
@@ -205,26 +210,26 @@ eval (Call callee tok args) = do
             let n = length argv
             when (n /= arity f) $ runtimeError tok $ "Expected " ++ show (arity f) ++ " arguments but got " ++ show n
             callFun f argv
-        (VClass c@(LoxClass _ methods _)) -> do
+        (VClass klass) -> do
             store <- liftIO $ newIORef M.empty
-            let this = VInstance c store
-            let initializer = M.findWithDefault (LoxFun tok True [] [] emptyEnv) "init" methods
+            let this = VInstance klass store
+            let initializer = fromMaybe (LoxFun tok True [] [] emptyEnv) (findMethod "init" klass)
             let n = length argv
             let k = arity (CallableFun initializer)
             when (n /= k) $ runtimeError tok $ "Expected " ++ show k ++ " arguments but got " ++ show n
-            (VFun f) <- makeMethod this initializer
+            (VFun f) <- bindMethod this initializer
             _ <- callFun f argv
             return this
         _ -> runtimeError tok "Can only call functions and classes."
 eval (Get target tok) = do
     lhs <- eval target
     case lhs of
-        this@(VInstance (LoxClass _ methods _) store) -> do
-            contents <- liftIO $ readIORef store
-            case M.lookup (_lexeme tok) contents of
+        this@(VInstance klass store) -> do
+            fields <- liftIO $ readIORef store
+            case M.lookup (_lexeme tok) fields of
                 (Just val) -> return val
-                Nothing -> case M.lookup (_lexeme tok) methods of
-                    (Just fn) -> makeMethod this fn
+                Nothing -> case findMethod (_lexeme tok) klass of
+                    (Just fn) -> bindMethod this fn
                     Nothing -> runtimeError tok $ "Undefined property '" ++ _lexeme tok ++ "'."
         _ -> runtimeError tok "Only instances have properties."
 eval (Set target tok expr) = do
@@ -265,8 +270,7 @@ exec (Class name mSuper methods) = do
     superclass <- traverse (\tok -> do
         superclass <- eval (Variable tok)
         case superclass of
-            (VClass c@(LoxClass superName _ _)) ->
-                if _lexeme superName == _lexeme name then runtimeError tok "A class can't inherit from itself" else return c
+            (VClass klass) -> return klass
             _ -> runtimeError tok "Superclass must be a class.") mSuper
     modifyEnv newScope -- New scope to hold `this`
     closure <- getEnv
