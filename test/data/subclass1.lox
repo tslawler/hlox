@@ -1,0 +1,17 @@
+class Top {
+    foo() {
+        print "top";
+    }
+}
+
+class Bottom < Top {
+    foo() {
+        print "bottom";
+    }
+}
+
+var top = Top();
+var bottom = Bottom();
+
+top.foo();  // should print "top"
+bottom.foo();  // should print "bottom"

@@ -292,11 +292,11 @@ funStmt kind = do
 classStmt :: Parser Stmt
 classStmt = do
     tok <- consumeP' isIdentifier "Expected class name."
-    -- TODO: inheritance
+    msuper <- match [Operator O_Less] >>= traverse (const (consumeP' isIdentifier "Expected superclass name."))
     consume (Open Brace) "Expected '{' after class name."
     methods <- go id
     consume (Close Brace) "Expected '}' at end of class."
-    return $ Class tok methods
+    return $ Class tok msuper methods
   where
     go f = do
         tok <- peekToken

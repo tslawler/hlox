@@ -1,5 +1,5 @@
 module HLox (
-    run, runRepl, runFile, prettyPrint
+    run, runRepl, runFile, parseFile, prettyPrint
 ) where
 
 import qualified Control.Monad.Except as E
@@ -9,7 +9,8 @@ import System.IO
 import System.IO.Error
 import System.Exit
 
-import HLox.Control.Base (runHLox)
+import HLox.Data.Stmt (Stmt)
+import HLox.Control.Base (HLox(), runHLox)
 import qualified HLox.Control.Scanner as Scanner
 import qualified HLox.Control.Parser as Parser
 import qualified HLox.Control.Pretty as Pretty
@@ -18,9 +19,13 @@ import HLox.Control.Interpreter (Runtime, withRuntime, liftHLox)
 
 run :: String -> Runtime ()
 run code = do
-    tokens <- liftHLox $ Scanner.lex code
-    prog <- liftHLox $ Parser.parseProgram tokens
+    prog <- liftHLox $ parse code
     Interpreter.runProgram prog
+
+parse :: String -> HLox [Stmt]
+parse code = do
+    tokens <- Scanner.lex code
+    Parser.parseProgram tokens
 
 prettyPrint :: String -> IO ()
 prettyPrint code = flip E.catchError (\_ -> exitWith (ExitFailure 65)) . void . runHLox $ do
@@ -46,6 +51,12 @@ repl = do
     input <- liftHLox.lift $ prompt
     E.catchError (run input) (\_ -> return ())
     repl
+
+parseFile :: FilePath -> IO ()
+parseFile file = do
+    code <- readFile file
+    result <- runHLox (parse code)
+    print result
 
 runFile :: FilePath -> IO ()
 runFile file = do

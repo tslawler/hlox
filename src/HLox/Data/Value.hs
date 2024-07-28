@@ -13,10 +13,10 @@ data ForeignFun = Clock deriving (Eq)
 type Scope = M.Map String (IORef Value)
 type Env = NonEmpty Scope
 
-data LoxClass = LoxClass Token (M.Map String LoxFun)
+data LoxClass = LoxClass Token (M.Map String LoxFun) (Maybe LoxClass)
     deriving (Eq)
 instance Show LoxClass where
-    show (LoxClass t _) = _lexeme t
+    show (LoxClass t _ _) = _lexeme t
 
 data LoxFun = LoxFun { _name :: Token, _isInitializer :: Bool, _params :: [Token], _body :: [Stmt], _closure :: Env }
     deriving (Eq)

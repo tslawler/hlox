@@ -205,7 +205,7 @@ eval (Call callee tok args) = do
             let n = length argv
             when (n /= arity f) $ runtimeError tok $ "Expected " ++ show (arity f) ++ " arguments but got " ++ show n
             callFun f argv
-        (VClass c@(LoxClass _ methods)) -> do
+        (VClass c@(LoxClass _ methods _)) -> do
             store <- liftIO $ newIORef M.empty
             let this = VInstance c store
             let initializer = M.findWithDefault (LoxFun tok True [] [] emptyEnv) "init" methods
@@ -219,7 +219,7 @@ eval (Call callee tok args) = do
 eval (Get target tok) = do
     lhs <- eval target
     case lhs of
-        this@(VInstance (LoxClass _ methods) store) -> do
+        this@(VInstance (LoxClass _ methods _) store) -> do
             contents <- liftIO $ readIORef store
             case M.lookup (_lexeme tok) contents of
                 (Just val) -> return val
@@ -261,12 +261,18 @@ exec (While cond body) = loop
 exec (Fun (F name params body)) = do
     closure <- getEnv
     modifyEnv' (define (_lexeme name) (VFun (CallableFun (LoxFun name False params body closure))))
-exec (Class name methods) = do
+exec (Class name mSuper methods) = do
+    superclass <- traverse (\tok -> do
+        superclass <- eval (Variable tok)
+        case superclass of
+            (VClass c@(LoxClass superName _ _)) ->
+                if _lexeme superName == _lexeme name then runtimeError tok "A class can't inherit from itself" else return c
+            _ -> runtimeError tok "Superclass must be a class.") mSuper
     modifyEnv newScope -- New scope to hold `this`
     closure <- getEnv
     let methodMap = M.fromList [(_lexeme fname, LoxFun fname (_lexeme fname == "init") params body closure) | (F fname params body) <- methods]
     modifyEnv dropScope
-    modifyEnv' (define (_lexeme name) (VClass (LoxClass name methodMap)))
+    modifyEnv' (define (_lexeme name) (VClass (LoxClass name methodMap superclass)))
 exec (Return tok expr) = do
     val <- eval expr
     Base.throwCustom (ReturnErr tok val)

@@ -13,7 +13,7 @@ data Stmt
     | Expr Expr -- ^ expr;
     | Var Token (Maybe Expr) -- ^ var token [= expr];
     | Fun FunDecl -- ^ fun name(arg1,...,argN) { body }
-    | Class Token [FunDecl]
+    | Class Token (Maybe Token) [FunDecl] -- ^ class name [< superclass] { body }
     | Return Token Expr -- ^ return expr; -- The token is the 'return' keyword itself.
     | Block [Stmt] -- ^ { stmt... }
     | If Expr Stmt (Maybe Stmt) -- ^ if (expr) thenStmt [else elseStmt]
