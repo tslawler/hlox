@@ -112,11 +112,11 @@ assign' tok val = let name = _lexeme tok in do
     unless success (runtimeError tok $ "Undefined variable '" ++ name ++ "'.")
     return val
 
-lookup' :: Token -> Runtime Value
-lookup' tok = let name = _lexeme tok in do
-    mbVal <- lookup name <$> getEnv
+lookup' :: Token -> String -> Runtime Value
+lookup' tok msg = do
+    mbVal <- lookup (_lexeme tok) <$> getEnv
     case mbVal of
-        Nothing -> runtimeError tok $ "Undefined variable '" ++ name ++ "'."
+        Nothing -> runtimeError tok msg
         (Just ref) -> liftIO $ readIORef ref
 
 callFun :: LoxCallable -> [Value] -> Runtime Value
@@ -140,8 +140,8 @@ makeMethod this (LoxFun nm par bod closure) = do
 
 eval :: Expr -> Runtime Value
 eval (Literal l) = return (fromLiteral l)
-eval (Variable tok) = lookup' tok
-eval (This tok) = lookup' tok
+eval (Variable tok) = lookup' tok $ "Undefined variable '" ++ _lexeme tok ++ "'."
+eval (This tok) = lookup' tok "Can't use 'this' outside a class."
 eval (Assign tok e) = do
     v <- eval e
     assign' tok v
