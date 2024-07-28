@@ -1,18 +1,18 @@
-class Top {
-    foo() {
-        print "top";
+class Donut {
+    cook() {
+        print "Bake it!";
     }
 }
 
-class Bottom < Top {
-    bar() {
-        print "bottom";
+class BostonCreme < Donut {
+    cook() {
+        super.cook();
+        print "Fill it with deliciousness!";
     }
 }
 
-var top = Top();
-var bottom = Bottom();
+var donut = Donut();
+var bc = BostonCreme();
 
-top.foo();  // should print "top"
-bottom.foo();  // should print "top"
-bottom.bar();  // should print "bottom"
+donut.cook();  // should print "Bake it!"
+bc.cook();  // should print "Bake it!" ; should print "Fill it with deliciousness!"

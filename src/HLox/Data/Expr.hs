@@ -15,6 +15,7 @@ data Expr
     | Literal Literal
     | Variable Token
     | This Token
+    | Super Token Token
     | Assign Token Expr
     deriving (Eq, Ord, Show)
 

@@ -194,6 +194,10 @@ baseExpr = foldr operations call opTable
             (Reserved R_False) -> return.Literal $ LitFalse
             (Reserved R_Nil) -> return.Literal $ LitNil
             (Reserved R_This) -> return.This $ tok
+            (Reserved R_Super) -> do
+                consume Dot "Expected '.' after 'super'."
+                method <- consumeP' isIdentifier "Expected superclass method name."
+                return $ Super tok method
             (Open Paren) -> do
                 e <- expr
                 consume (Close Paren) "Expected ')' after expression."

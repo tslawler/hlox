@@ -116,7 +116,8 @@ assign' tok val = let name = _lexeme tok in do
 
 lookup' :: Token -> String -> Runtime Value
 lookup' tok msg = do
-    mbVal <- lookup (_lexeme tok) <$> getEnv
+    env <- getEnv
+    let mbVal = lookup (_lexeme tok) env
     case mbVal of
         Nothing -> runtimeError tok msg
         (Just ref) -> liftIO $ readIORef ref
@@ -241,6 +242,14 @@ eval (Set target tok expr) = do
             liftIO $ writeIORef store (M.insert (_lexeme tok) rhs contents)
             return rhs
         _ -> runtimeError tok "Only instances have properties."
+eval (Super tok method) = do
+    (VClass super) <- lookup' tok "Can't use 'super' outside of a subclass."
+    this <- do
+        mbThis <- lookup "this" <$> getEnv
+        maybe (runtimeError tok "Can't use 'super' outside of a method.") (liftIO . readIORef) mbThis
+    case findMethod (_lexeme method) super of
+        (Just fn) -> bindMethod this fn
+        Nothing -> runtimeError method "Superclass method not found"
 
 exec :: Stmt -> Runtime ()
 exec (Print e) = do
@@ -272,7 +281,8 @@ exec (Class name mSuper methods) = do
         case superclass of
             (VClass klass) -> return klass
             _ -> runtimeError tok "Superclass must be a class.") mSuper
-    modifyEnv newScope -- New scope to hold `this`
+    modifyEnv newScope -- New scope to hold `this` and `super`
+    for_ superclass (\klass -> modifyEnv' (define "super" (VClass klass)))
     closure <- getEnv
     let methodMap = M.fromList [(_lexeme fname, LoxFun fname (_lexeme fname == "init") params body closure) | (F fname params body) <- methods]
     modifyEnv dropScope

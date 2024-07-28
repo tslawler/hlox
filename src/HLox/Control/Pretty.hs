@@ -25,6 +25,7 @@ prettify (Call expr _ exprs) = parens $ ["call", prettify expr] ++ map prettify 
 prettify (Get expr tok) = parens ["get", prettify expr, _lexeme tok]
 prettify (Set lhs tok rhs) = parens ["set", prettify lhs, _lexeme tok, prettify rhs]
 prettify (This _) = "this"
+prettify (Super _ method) = "super." ++ _lexeme method
 
 print :: Expr -> IO ()
 print expr = putStrLn (prettify expr)
