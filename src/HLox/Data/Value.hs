@@ -18,7 +18,7 @@ data LoxClass = LoxClass Token (M.Map String LoxFun)
 instance Show LoxClass where
     show (LoxClass t _) = _lexeme t
 
-data LoxFun = LoxFun { _name :: Token, _params :: [Token], _body :: [Stmt], _closure :: Env }
+data LoxFun = LoxFun { _name :: Token, _isInitializer :: Bool, _params :: [Token], _body :: [Stmt], _closure :: Env }
     deriving (Eq)
 
 data LoxCallable = 
@@ -28,10 +28,10 @@ data LoxCallable =
 
 arity :: LoxCallable -> Int
 arity (FFI Clock) = 0
-arity (CallableFun (LoxFun _ ps _ _)) = length ps
+arity (CallableFun (LoxFun _ _ ps _ _)) = length ps
 instance Show LoxCallable where
     show (FFI Clock) = "<native function clock>"
-    show (CallableFun (LoxFun nm _ _ _)) = "<function " ++ _lexeme nm ++ ">"
+    show (CallableFun (LoxFun nm _ _ _ _)) = "<function " ++ _lexeme nm ++ ">"
 
 data Value
     = VStr !String

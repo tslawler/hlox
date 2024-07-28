@@ -123,20 +123,22 @@ callFun :: LoxCallable -> [Value] -> Runtime Value
 callFun (FFI Clock) _ = do
     (MkSystemTime sec _) <- liftHLox.lift $ getSystemTime
     return (VNum $ fromIntegral sec)
-callFun (CallableFun (LoxFun _ params body closure)) args = do
+callFun (CallableFun (LoxFun _ isInitializer params body closure)) args = do
     oldEnv <- getEnv
     setEnv closure
     modifyEnv newScope
     traverse_ (\(p,v) -> modifyEnv' (define (_lexeme p) v)) (zip params args)
     out <- Base.catchCustom (traverse_ exec body $> VNil) (\(ReturnErr _ v) -> return v)
     setEnv oldEnv
-    return out
+    if isInitializer then do
+        let ref = M.findWithDefault (error "HLOX BUG: no bound 'this' in initializer???") "this" (peekScope closure)
+        liftIO $ readIORef ref
+    else return out
 
 makeMethod :: Value -> LoxFun -> Runtime Value
-makeMethod this (LoxFun nm par bod closure) = do
+makeMethod this (LoxFun nm isInit par bod closure) = do
     newClosure <- liftIO $ define "this" this closure
-    return $ VFun (CallableFun (LoxFun nm par bod newClosure))
-
+    return $ VFun (CallableFun (LoxFun nm isInit par bod newClosure))
 
 eval :: Expr -> Runtime Value
 eval (Literal l) = return (fromLiteral l)
@@ -203,10 +205,16 @@ eval (Call callee tok args) = do
             let n = length argv
             when (n /= arity f) $ runtimeError tok $ "Expected " ++ show (arity f) ++ " arguments but got " ++ show n
             callFun f argv
-        (VClass c) -> do
-            unless (null argv) $ runtimeError tok $ "Expected 0 arguments but got " ++ show (length argv)
+        (VClass c@(LoxClass _ methods)) -> do
             store <- liftIO $ newIORef M.empty
-            return $ VInstance c store
+            let this = VInstance c store
+            let initializer = M.findWithDefault (LoxFun tok True [] [] emptyEnv) "init" methods
+            let n = length argv
+            let k = arity (CallableFun initializer)
+            when (n /= k) $ runtimeError tok $ "Expected " ++ show k ++ " arguments but got " ++ show n
+            (VFun f) <- makeMethod this initializer
+            _ <- callFun f argv
+            return this
         _ -> runtimeError tok "Can only call functions and classes."
 eval (Get target tok) = do
     lhs <- eval target
@@ -252,11 +260,11 @@ exec (While cond body) = loop
     }
 exec (Fun (F name params body)) = do
     closure <- getEnv
-    modifyEnv' (define (_lexeme name) (VFun (CallableFun (LoxFun name params body closure))))
+    modifyEnv' (define (_lexeme name) (VFun (CallableFun (LoxFun name False params body closure))))
 exec (Class name methods) = do
     modifyEnv newScope -- New scope to hold `this`
     closure <- getEnv
-    let methodMap = M.fromList [(_lexeme fname, LoxFun fname params body closure) | (F fname params body) <- methods]
+    let methodMap = M.fromList [(_lexeme fname, LoxFun fname (_lexeme fname == "init") params body closure) | (F fname params body) <- methods]
     modifyEnv dropScope
     modifyEnv' (define (_lexeme name) (VClass (LoxClass name methodMap)))
 exec (Return tok expr) = do

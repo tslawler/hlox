@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 module HLox.Control.Env (
-    Env(), emptyEnv, define, assign, lookup, newScope, dropScope
+    Env(), emptyEnv, define, assign, lookup, newScope, dropScope, peekScope
 ) where
 
 import Prelude hiding (lookup)
@@ -23,6 +23,9 @@ findScope name (m:|ms) = go [] m ms
                 [] -> Nothing
                 (r1:rs) -> go (m:l) r1 rs
             (Just _) -> Just $ Zip l m r
+
+peekScope :: Env a -> M.Map String a
+peekScope (m:|_) = m
 
 newScope :: Env a -> Env a
 newScope (m:|ms) = M.empty :| (m:ms)
