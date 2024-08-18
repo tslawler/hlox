@@ -273,8 +273,9 @@ exec (While cond body) = loop
         when (truthy val) $ exec body *> loop
     }
 exec (Fun (F name params body)) = do
+    modifyEnv' (define (_lexeme name) VNil) -- Temporarily
     closure <- getEnv
-    modifyEnv' (define (_lexeme name) (VFun (CallableFun (LoxFun name False params body closure))))
+    void $ assign' name (VFun (CallableFun (LoxFun name False params body closure)))
 exec (Class name mSuper methods) = do
     superclass <- traverse (\tok -> do
         superclass <- eval (Variable tok)
