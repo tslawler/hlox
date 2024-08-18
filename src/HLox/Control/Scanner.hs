@@ -3,7 +3,6 @@ module HLox.Control.Scanner (
 ) where
 
 import Prelude hiding (lex)
-import Text.Megaparsec.Pos
 import Data.Monoid
 import Data.Char (isAsciiLower, isAsciiUpper, isDigit)
 import qualified Data.List as L
@@ -12,17 +11,19 @@ import Control.Monad.RWS
 
 import HLox.Control.Base (HLox, report)
 import qualified HLox.Control.Base as Base
-import HLox.Data.Token
+-- TODO: Find a better way of doing this. (Probably using lens.)
+import HLox.Data.Token hiding (_line, _col)
 
 data ScannerState = S {
     _data :: [Char], -- ^ Source data yet to be processed.
     _acc :: [Char], -- ^ Characters read for the current token, in reverse order.
-    _pos :: !SourcePos, -- ^ Position of the current character.
-    _startPos :: !SourcePos -- ^ Position of the start of the current token.
+    _line :: !Int, -- ^ Line number of the current character.
+    _col :: !Int, -- ^ Column number of the current character.
+    _startCol :: !Int -- ^ Column number of the start of the current token.
 } deriving (Eq, Ord, Show)
 
-initState :: FilePath -> [Char] -> ScannerState
-initState filename cs = S cs [] (initialPos filename) pos1
+initState :: [Char] -> ScannerState
+initState cs = S cs [] 1 1 1
 
 type Scanner = RWST () (Endo [Token]) ScannerState HLox
 
@@ -36,8 +37,8 @@ lex source = do
 lexer :: Scanner ()
 lexer = do
     s <- get
-    put s{_startPos = _pos s, _acc = []}
-    if isAtEnd s then return () else do
+    put s{_startCol = _col s, _acc = []}
+    if isAtEnd s then addToken EOF else do
         scanToken
         lexer
 
@@ -69,7 +70,7 @@ scanToken = do
             op <- match '=' O_GreaterEqual O_Greater
             addToken (Operator op)
         '/' -> join $ match '/' comment (addToken (Operator O_Slash))
-        '\n' -> modify newline
+        '\n' -> modify (\s -> s{_line = _line s + 1, _col = 1})
         x | isSpace x -> return ()
         '"' -> stringLiteral
         x | isDigit x -> numberLiteral
@@ -98,16 +99,8 @@ isAlphanumeric c = isAlpha c || isDigit c
 advance :: Scanner Char
 advance = do
     c <- gets (head . _data)
-    modify (\s -> s{_data = tail (_data s), _acc = c:_acc s, _pos = newcol (_pos s)})
+    modify (\s -> s{_data = tail (_data s), _acc = c:_acc s, _col = _col s + 1})
     return c
-
--- | Increments source pos by 1 column.
-newcol :: SourcePos -> SourcePos
-newcol (SourcePos file line col) = SourcePos file line (col <> pos1)
-
--- | Increments source pos by 1 line.
-newline :: SourcePos -> SourcePos
-newline (SourcePos file line _) = SourcePos file (line <> pos1) pos1
 
 -- | Returns one character past the current.
 peek :: Scanner (Maybe Char)
@@ -140,7 +133,7 @@ addToken' :: (String -> TokenType) -> Scanner ()
 addToken' mkType = do
     s <- get
     let val = reverse (_acc s)
-    let token = WithPos (_startPos s) (_pos s) (length val) (mkType val)
+    let token = Token (mkType val) val (_line s) (_startCol s)
     tell $ Endo (token:)
     return ()
 
@@ -162,18 +155,18 @@ stringLiteral = do
     case c of
         Nothing -> scanError "Unterminated string"
         -- Guaranteed to be '"'
-        (Just _) -> advance >> addToken' (TokLit . LitStr . tail . init)
+        (Just _) -> advance >> addToken' (LitToken . LT_Str . tail . init)
 
 numberLiteral :: Scanner ()
 numberLiteral = do
     eatWhile isDigit
     (c,d) <- peek2
     when (c == Just '.' && maybe False isDigit d) (advance >> eatWhile isDigit)
-    addToken' (TokLit . LitNum . read)
+    addToken' (LitToken . LT_Num . read)
 
 identifier :: Scanner ()
 identifier = do
     eatWhile isAlphanumeric
     addToken' (\word -> case L.lookup word reserved of
-        Nothing -> TokId word
-        (Just res) -> res)
+        Nothing -> Identifier word
+        (Just res) -> Reserved res)

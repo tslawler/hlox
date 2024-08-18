@@ -1,36 +1,37 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Use camelCase" #-}
 module HLox.Data.Token (
-    Token(..), TokenType(..), Brace(..), OpToken(..), Reserved(..), reserved, isIdentifier
+    Token(..), TokenType(..), LitToken(..), Brace(..), OpToken(..), Reserved(..), reserved, isIdentifier
 ) where
 
-import HLox.Data.Literal
-import Text.Megaparsec.Pos
-
-data WithPos a = WithPos {
-    startPos :: SourcePos,
-    endPos :: SourcePos,
-    tokenLength :: Int,
-    tokenVal :: a
+data Token = Token {
+    _type :: TokenType,
+    _lexeme :: String,
+    _line :: Int,
+    _col :: Int
 } deriving (Eq, Ord, Show)
 
-type Token = WithPos TokenType
-
 data TokenType
-    = TokLit Literal
-    | TokId String
-    | TokRes Reserved
-    | TokOp OpToken
+    = Reserved Reserved
+    | LitToken LitToken
+    | Identifier String
+    | Operator OpToken
     | Open Brace
     | Close Brace
-    | Semicolon
-    | Dot
     | Comma
+    | Dot
+    | Semicolon
+    | EOF
     deriving (Eq, Ord, Show)
 
 isIdentifier :: TokenType -> Bool
-isIdentifier (TokId _) = True
+isIdentifier (Identifier _) = True
 isIdentifier _ = False
+
+data LitToken
+    = LT_Str String
+    | LT_Num Double
+    deriving (Eq, Ord, Show)
 
 data Brace = Paren | Brace deriving (Eq, Ord, Show, Bounded)
 
@@ -68,22 +69,22 @@ data Reserved
     | R_Nil
     deriving (Eq, Ord, Show, Bounded)
 
-reserved :: [(String, TokenType)]
+reserved :: [(String, Reserved)]
 reserved =
-    [ ("true", TokLit LitTrue)
-    , ("false", TokLit LitFalse)
-    , ("nil", TokLit LitNil) 
-    , ("and", TokRes R_And)
-    , ("or", TokRes R_Or)
-    , ("if", TokRes R_If)
-    , ("else", TokRes R_Else)
-    , ("for", TokRes R_For)
-    , ("while", TokRes R_While)
-    , ("print", TokRes R_Print)
-    , ("var", TokRes R_Var)
-    , ("fun", TokRes R_Fun)
-    , ("return", TokRes R_Return)
-    , ("class", TokRes R_Class)
-    , ("super", TokRes R_Super)
-    , ("this", TokRes R_This)
+    [ ("true", R_True)
+    , ("false", R_False)
+    , ("nil", R_Nil)
+    , ("and", R_And)
+    , ("or", R_Or)
+    , ("if", R_If)
+    , ("else", R_Else)
+    , ("for", R_For)
+    , ("while", R_While)
+    , ("print", R_Print)
+    , ("var", R_Var)
+    , ("fun", R_Fun)
+    , ("return", R_Return)
+    , ("class", R_Class)
+    , ("super", R_Super)
+    , ("this", R_This)
     ]
